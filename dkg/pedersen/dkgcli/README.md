@@ -2,6 +2,7 @@
 
 DKGCLI is a CLI tool for using the DKG protocol. Here is a complete scenario:
 
+## Dkg
 ```sh
 # Install the CLI
 go install .
@@ -31,7 +32,10 @@ dkgcli --config /tmp/node2 dkg encrypt --message deadbeef
 
 # Decrypt a message
 dkgcli --config /tmp/node3 dkg decrypt --encrypted <...>
+```
 
+## verifiable encryption and decryption (F3B)
+```sh
 # Encrypt a message with verifiable encryption function 
 # Receive the ciphertext as well as the encryption proofs
 # GBar is the second generator of the group.
@@ -42,7 +46,10 @@ dkgcli --config /tmp/node2 dkg verifiableEncrypt --message deadbeef --GBar 1d019
 # In the case of batch decryption you can append as many as ciphertexts you want using ":" as the separator 
 # GBar should be the same that we used for encryption
 dkgcli --config /tmp/node3 dkg verifiableDecrypt --ciphertexts <...> --GBar 1d0194fdc2fa2ffcc041d3ff12045b73c86e4ff95ff662a5eee82abdf44a53c7
+```
 
+## Resharing
+```sh
 # Adding a new node
 LLVL=info dkgcli --config /tmp/node4 start --routing tree --listen tcp://127.0.0.1:2004
 
@@ -61,3 +68,17 @@ dkgcli --config /tmp/node1 dkg reshare \
 
 # You should be able to decrypt the same ciphertext with the new committee
 dkgcli --config /tmp/node4 dkg verifiableDecrypt --ciphertexts <...> --GBar 1d0194fdc2fa2ffcc041d3ff12045b73c86e4ff95ff662a5eee82abdf44a53c7
+```
+## Docker image
+```sh
+# Now for creating the docker image of the dkgcli you should do the following:
+# These commands would build a docker image of the package and write it in docker file dela/dkg:latest
+cd ../../..
+docker build -t dela/dkg:latest -f dkg/pedersen/dkgcli/dockerfile .
+docker run --rm -e LLVL=info dela/dkg
+
+# Then you need to change the tag of your docker image in order to push it to your docker hub repository
+docker tag dela/dkg:latest YOUR_DOCKERHUB_NAME/firstimage
+
+# Push the docker image to docker hub
+docker push YOUR_DOCKERHUB_NAME/firstimage
