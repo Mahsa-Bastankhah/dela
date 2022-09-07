@@ -2,6 +2,7 @@ package pedersen
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -39,9 +40,9 @@ var (
 )
 
 const (
-	setupTimeout     = time.Second * 1000
-	decryptTimeout   = time.Second * 10000
-	resharingTimeout = time.Second * 1000
+	setupTimeout     = time.Hour * 2
+	decryptTimeout   = time.Hour * 2
+	resharingTimeout = time.Hour * 2
 )
 
 // Pedersen allows one to initialize a new DKG protocol.
@@ -53,7 +54,7 @@ type Pedersen struct {
 	factory serde.Factory
 }
 
-var workerNumSlice = []int{1, 1, 2, 4, 8, 16, 32, 64, 128, 265}
+var workerNumSlice = []int{1, 1, 2, 4, 8, 16, 32, 32, 100, 150, 300, 700}
 
 // NewPedersen returns a new DKG Pedersen factory
 func NewPedersen(m mino.Mino) (*Pedersen, kyber.Point) {
@@ -127,11 +128,13 @@ func (a *Actor) Setup(co crypto.CollectiveAuthority, threshold int) (kyber.Point
 	}
 
 	message := types.NewStart(threshold, addrs, pubkeys)
+	for _, addr := range addrs {
+		errs := sender.Send(message, addr)
+		err = <-errs
+		if err != nil {
+			return nil, xerrors.Errorf("failed to send start: %v", err)
+		}
 
-	errs := sender.Send(message, addrs...)
-	err = <-errs
-	if err != nil {
-		return nil, xerrors.Errorf("failed to send start: %v", err)
 	}
 
 	dkgPubKeys := make([]kyber.Point, len(addrs))
@@ -143,6 +146,8 @@ func (a *Actor) Setup(co crypto.CollectiveAuthority, threshold int) (kyber.Point
 			return nil, xerrors.Errorf("got an error from '%s' while "+
 				"receiving: %v", addr, err)
 		}
+
+		fmt.Println(i)
 
 		doneMsg, ok := msg.(types.StartDone)
 		if !ok {

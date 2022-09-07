@@ -20,3 +20,28 @@
 2022/08/31 20:54:14 n = 32 , batchSize = 128  ,decryption time = 1.026936971 s, throughput =  124.6425 tx/s , dkg setup time = 35.67755 s
 2022/08/31 20:54:16 n = 32 , batchSize = 256  ,decryption time = 1.427332262 s, throughput =  179.35558 tx/s , dkg setup time = 35.67755 s
 /////////////////////
+2022/09/06 16:29:22 n = 100 , batchSize = 1  ,decryption time = 6.043389737 s, throughput =  0.16547005 tx/s , dkg setup time = 1488.1104 s
+2022/09/06 16:29:24 n = 100 , batchSize = 2  ,decryption time = 1.910863468 s, throughput =  1.0466472 tx/s , dkg setup time = 1488.1104 s
+2022/09/06 16:29:26 n = 100 , batchSize = 4  ,decryption time = 1.9390589660000002 s, throughput =  2.0628562 tx/s , dkg setup time = 1488.1104 s
+2022/09/06 16:29:28 n = 100 , batchSize = 8  ,decryption time = 1.8652788390000001 s, throughput =  4.2889028 tx/s , dkg setup time = 1488.1104 s
+2022/09/06 16:29:30 n = 100 , batchSize = 16  ,decryption time = 1.906928101 s, throughput =  8.390458 tx/s , dkg setup time = 1488.1104 s
+2022/09/06 16:29:32 n = 100 , batchSize = 32  ,decryption time = 2.072896716 s, throughput =  15.437334 tx/s , dkg setup time = 1488.1104 s
+///////////////////
+2022/09/07 12:07:34 n = 100 , batchSize = 1  ,decryption time = 6.269178364 s, throughput =  0.15951054 tx/s , dkg setup time = 1582.5128 s
+2022/09/07 12:07:35 n = 100 , batchSize = 2  ,decryption time = 1.90979588 s, throughput =  1.0472324 tx/s , dkg setup time = 1582.5128 s
+2022/09/07 12:07:37 n = 100 , batchSize = 4  ,decryption time = 1.885142247 s, throughput =  2.1218557 tx/s , dkg setup time = 1582.5128 s
+2022/09/07 12:07:39 n = 100 , batchSize = 8  ,decryption time = 1.858638305 s, throughput =  4.3042264 tx/s , dkg setup time = 1582.5128 s.
+2022/09/07 12:07:41 n = 100 , batchSize = 16  ,decryption time = 1.85603842 s, throughput =  8.620511 tx/s , dkg setup time = 1582.5128 s
+2022/09/07 12:07:43 n = 100 , batchSize = 32  ,decryption time = 1.9754390019999999 s, throughput =  16.19893 tx/s , dkg setup time = 1582.5128 s
+2022/09/07 12:07:46 n = 100 , batchSize = 64  ,decryption time = 2.5084269729999997 s, throughput =  25.513998 tx/s , dkg setup time = 1582.5128 s
+2022/09/07 12:07:49 n = 100 , batchSize = 128  ,decryption time = 2.815742211 s, throughput =  45.458706 tx/s , dkg setup time = 1582.5128 s2022/09/07 12:39:03 n = 100 , batchSize = 1  ,decryption time = 5.9940364200000005 s, throughput =  0.16683249 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:05 n = 100 , batchSize = 2  ,decryption time = 1.9401996609999999 s, throughput =  1.0308218 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:07 n = 100 , batchSize = 4  ,decryption time = 1.895277975 s, throughput =  2.1105084 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:09 n = 100 , batchSize = 8  ,decryption time = 1.821900659 s, throughput =  4.391019 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:11 n = 100 , batchSize = 16  ,decryption time = 1.81742965 s, throughput =  8.803642 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:13 n = 100 , batchSize = 32  ,decryption time = 2.01699808 s, throughput =  15.865162 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:16 n = 100 , batchSize = 64  ,decryption time = 2.495187911 s, throughput =  25.64937 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:19 n = 100 , batchSize = 128  ,decryption time = 2.844910544 s, throughput =  44.992626 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:24 n = 100 , batchSize = 256  ,decryption time = 4.146366731 s, throughput =  61.740803 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:33 n = 100 , batchSize = 512  ,decryption time = 7.753714665 s, throughput =  66.03287 tx/s , dkg setup time = 1495.8042 s
+2022/09/07 12:39:52 n = 100 , batchSize = 1024  ,decryption time = 15.281742219 s, throughput =  67.008064 tx/s , dkg setup time = 1495.8042 s

@@ -22,7 +22,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-const ioTimeout = 30 * time.Second
+const ioTimeout = 2 * time.Hour
 
 // event is the structure sent over the connection between the client and the
 // daemon and vice-versa using a JSON encoding.

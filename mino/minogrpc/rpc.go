@@ -7,6 +7,7 @@ package minogrpc
 
 import (
 	context "context"
+
 	"github.com/rs/xid"
 	"go.dedis.ch/dela"
 	"go.dedis.ch/dela/internal/debugsync"

@@ -536,7 +536,7 @@ func (h *Handler) sendDeals(ctx context.Context, out mino.Sender,
 
 func (h *Handler) receiveDeals(ctx context.Context, participants []mino.Address,
 	from mino.Address, out mino.Sender) error {
-	dela.Logger.Trace().Msgf("%v is handling deals from other nodes", h.me)
+	dela.Logger.Info().Msgf("%v is handling deals from other nodes", h.me)
 
 	numReceivedDeals := 0
 	for numReceivedDeals < len(participants)-1 {
@@ -549,7 +549,7 @@ func (h *Handler) receiveDeals(ctx context.Context, participants []mino.Address,
 				return xerrors.Errorf("failed to handle received deal: %v", err)
 			}
 
-			dela.Logger.Trace().Msgf("%s handled deal #%v from %s",
+			dela.Logger.Info().Msgf("%s handled deal #%v from %s",
 				h.me, numReceivedDeals, df.from)
 			numReceivedDeals++
 
@@ -559,7 +559,7 @@ func (h *Handler) receiveDeals(ctx context.Context, participants []mino.Address,
 		}
 	}
 
-	dela.Logger.Debug().Msgf("%v received all the expected deals", h.me)
+	dela.Logger.Info().Msgf("%v received all the expected deals", h.me)
 
 	return nil
 }
@@ -618,7 +618,7 @@ func (h *Handler) handleDeal(msg *types.Deal, from mino.Address,
 }
 
 func (h *Handler) certify(ctx context.Context) error {
-	dela.Logger.Trace().Msgf("%v is certifying dkg", h.me)
+	dela.Logger.Info().Msgf("%v is certifying dkg", h.me)
 
 	i := 0
 	for !h.dkg.Certified() {

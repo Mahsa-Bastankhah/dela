@@ -123,7 +123,7 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 	// we want to time the decryption for different batch sizes with different number of nodes
 	// numWorkersSlice := []int{16, 16, 32, 64, 64, 64, 64}
 	// batchSizeSlice := []int{32, 64, 128, 256, 512, 1024, 2048}
-	batchSizeSlice := []int{1, 2, 4, 8, 16, 32, 64, 128, 256}
+	batchSizeSlice := []int{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}
 
 	// initiating the log file for writing the delay and throughput data
 	f, err := os.OpenFile("../logs/test.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -133,8 +133,8 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 	log.SetOutput(wrt)
 
 	// setting up the dkg
-	n := 80
-	threshold := 80
+	n := 128
+	threshold := 128
 
 	minos := make([]mino.Mino, n)
 	dkgs := make([]dkg.DKG, n)
@@ -206,13 +206,13 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 		// decryopting the batch ciphertext message
 		fmt.Println("decrypting the batch ...")
 		start = time.Now()
-		_, err := actors[0].VerifiableDecrypt(ciphertexts)
+		decrypted, err := actors[0].VerifiableDecrypt(ciphertexts)
 		decryptionTime := time.Since(start)
 		require.NoError(t, err)
 
-		// for i := 0; i < batchSize; i++ {
-		// 	require.Equal(t, keys[i], decrypted[i])
-		// }
+		for i := 0; i < batchSize; i++ {
+			require.Equal(t, keys[i], decrypted[i])
+		}
 
 		log.Printf("n = %d , batchSize = %d  ,decryption time = %v s, throughput =  %v tx/s , dkg setup time = %v s",
 			n, batchSize, decryptionTime.Seconds(), float32(batchSize)/float32(decryptionTime.Seconds()), float32(setupTime.Seconds()))

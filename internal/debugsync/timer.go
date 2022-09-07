@@ -7,7 +7,7 @@ import (
 	"go.dedis.ch/dela"
 )
 
-const mutexTimeout = 600 * time.Second
+const mutexTimeout = 2 * time.Hour
 
 func startLockTimer(msg string) chan struct{} {
 	done := make(chan struct{})
