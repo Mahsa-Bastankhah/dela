@@ -535,7 +535,6 @@ func (f msgFormat) Decode(ctx serde.Context, data []byte) (serde.Message, error)
 		}
 
 		resp := types.NewVerifiableDecryptRequest(decodedCiphertexts)
-
 		return resp, nil
 	}
 

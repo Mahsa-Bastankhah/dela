@@ -332,35 +332,47 @@ func (h *Handler) handleVerifiableDecrypt(out mino.Sender, msg types.VerifiableD
 	workerNum := workerNumSlice[int64(math.Log2(float64(batchsize)))]
 
 	shareAndProofs := make([]types.ShareAndProof, batchsize)
-	jobChan := make(chan job, batchsize)
+	if batchsize > 1 {
+		jobChan := make(chan job, batchsize)
 
-	for i, cp := range ciphertexts {
-		jobChan <- job{
-			index: i,
-			cp:    cp,
-		}
-
-	}
-	close(jobChan)
-
-	if batchsize < workerNum {
-		workerNum = batchsize
-	}
-	for i := 0; i < workerNum; i++ {
-		wgBatchReply.Add(1)
-		go func(jobChan <-chan job) {
-			defer wgBatchReply.Done()
-
-			for j := range jobChan {
-				h.verifiableDecryption(&j)
-				shareAndProofs[j.index] = j.sp
-
+		for i, cp := range ciphertexts {
+			jobChan <- job{
+				index: i,
+				cp:    cp,
 			}
 
-		}(jobChan)
+		}
+		close(jobChan)
+
+		if batchsize < workerNum {
+			workerNum = batchsize
+		}
+		for i := 0; i < workerNum; i++ {
+			wgBatchReply.Add(1)
+			go func(jobChan <-chan job) {
+				defer wgBatchReply.Done()
+
+				for j := range jobChan {
+					h.verifiableDecryption(&j)
+					shareAndProofs[j.index] = j.sp
+
+				}
+
+			}(jobChan)
+		}
+
+		wgBatchReply.Wait()
+
+	} else {
+		j := job{
+			index: 0,
+			cp:    ciphertexts[0],
+		}
+		h.verifiableDecryption(&j)
+		shareAndProofs[0] = j.sp
+
 	}
 
-	wgBatchReply.Wait()
 	verifiableDecryptReply := types.NewVerifiableDecryptReply(shareAndProofs)
 
 	errs := out.Send(verifiableDecryptReply, from)
@@ -536,7 +548,7 @@ func (h *Handler) sendDeals(ctx context.Context, out mino.Sender,
 
 func (h *Handler) receiveDeals(ctx context.Context, participants []mino.Address,
 	from mino.Address, out mino.Sender) error {
-	dela.Logger.Info().Msgf("%v is handling deals from other nodes", h.me)
+	dela.Logger.Trace().Msgf("%v is handling deals from other nodes", h.me)
 
 	numReceivedDeals := 0
 	for numReceivedDeals < len(participants)-1 {
@@ -549,7 +561,7 @@ func (h *Handler) receiveDeals(ctx context.Context, participants []mino.Address,
 				return xerrors.Errorf("failed to handle received deal: %v", err)
 			}
 
-			dela.Logger.Info().Msgf("%s handled deal #%v from %s",
+			dela.Logger.Trace().Msgf("%s handled deal #%v from %s",
 				h.me, numReceivedDeals, df.from)
 			numReceivedDeals++
 
@@ -559,7 +571,7 @@ func (h *Handler) receiveDeals(ctx context.Context, participants []mino.Address,
 		}
 	}
 
-	dela.Logger.Info().Msgf("%v received all the expected deals", h.me)
+	dela.Logger.Trace().Msgf("%v received all the expected deals", h.me)
 
 	return nil
 }
@@ -720,7 +732,9 @@ func (h *Handler) handleReshare(out mino.Sender,
 	h.startRes.Reshare()
 
 	ctx := context.Background()
-	ctx, _ = context.WithTimeout(ctx, 5*time.Minute)
+	//nOld := len(msg.GetAddrsOld())
+	//nNew := len(msg.GetAddrsNew())
+	ctx, _ = context.WithTimeout(ctx, time.Duration(10000000)*time.Second)
 	go func() {
 		err := h.reshare(ctx, msg, from, out)
 		if err != nil {
@@ -841,7 +855,7 @@ func (h *Handler) sendDealsResharing(ctx context.Context, out mino.Sender,
 		return xerrors.Errorf("failed to compute the deals: %v", err)
 	}
 
-	dela.Logger.Trace().Msgf("%s is sending its deals", h.me)
+	dela.Logger.Info().Msgf("%s is sending its deals", h.me)
 
 	done := make(chan int)
 	errors := make(chan error)
@@ -861,7 +875,7 @@ func (h *Handler) sendDealsResharing(ctx context.Context, out mino.Sender,
 		//dealResharing contains the public coefficients as well
 		dealResharingMsg := types.NewDealResharing(dealMsg, publicCoeff)
 
-		dela.Logger.Trace().Msgf("%s sent dealResharing %d", h.me, i)
+		dela.Logger.Info().Msgf("%s sent dealResharing %d", h.me, i)
 		errch := out.Send(dealResharingMsg, participants[i])
 
 		// this should be further improved by using a worker pool,
@@ -891,12 +905,12 @@ func (h *Handler) sendDealsResharing(ctx context.Context, out mino.Sender,
 			return xerrors.Errorf("failed sending a deal: %v", err)
 
 		case <-ctx.Done():
-			dela.Logger.Error().Msgf("%s timed out while sending deals", h.me)
-			return xerrors.Errorf("timed out while sending deals")
+			dela.Logger.Error().Msgf("%s timed out while sending deals resharing", h.me)
+			return xerrors.Errorf("timed out while sending deals resharing")
 		}
 	}
 
-	dela.Logger.Debug().Msgf("%s sent all its deals", h.me)
+	dela.Logger.Info().Msgf("%s sent all its deals", h.me)
 
 	return nil
 }
@@ -973,7 +987,7 @@ func (h *Handler) receiveDealsResharing(ctx context.Context, isCommonNode bool, 
 		}
 	}
 
-	dela.Logger.Debug().Msgf("%v received all the expected deals", h.me)
+	dela.Logger.Info().Msgf("%v received all the expected deals", h.me)
 
 	return nil
 }

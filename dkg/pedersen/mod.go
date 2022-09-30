@@ -147,8 +147,6 @@ func (a *Actor) Setup(co crypto.CollectiveAuthority, threshold int) (kyber.Point
 				"receiving: %v", addr, err)
 		}
 
-		fmt.Println(i)
-
 		doneMsg, ok := msg.(types.StartDone)
 		if !ok {
 			return nil, xerrors.Errorf("expected to receive a Done message, but "+
@@ -361,16 +359,24 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, err
 	workerNum := workerNumSlice[int64(math.Log2(float64(batchsize)))]
 
 	message := types.NewVerifiableDecryptRequest(ciphertexts)
+
+	start := time.Now()
 	// sending the decrypt request to the nodes
 	err = <-sender.Send(message, addrs...)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to send verifiable decrypt request: %v", err)
 	}
 
+	end := time.Since(start)
+	if batchsize < 128 {
+		fmt.Println("time sending the message, batchsize ", batchsize, " time : ", end)
+	}
+
 	var respondArr []types.VerifiableDecryptReply
 	// active address keeps the addresses of the nodes that actively participate in the decryption process
 	var activeAddrs []mino.Address
 	// receive decrypt reply from the nodes
+
 	for i := 0; i < len(addrs); i++ {
 		from, message, err := receiver.Recv(ctx)
 		dela.Logger.Debug().Msgf("received the %d th share from %v\n", i, from)
@@ -388,57 +394,87 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, err
 			activeAddrs = append(activeAddrs, addrs[i])
 		}
 	}
+
 	// the final decrypted message
 	decryptedMessage := make([][]byte, batchsize)
 
 	var wgBatchReply sync.WaitGroup
 	jobChan := make(chan int, batchsize)
 
-	for i := 0; i < batchsize; i++ {
-		jobChan <- i
-	}
+	if batchsize > 1 {
+		for i := 0; i < batchsize; i++ {
+			jobChan <- i
+		}
 
-	close(jobChan)
+		close(jobChan)
 
-	if batchsize < workerNum {
-		workerNum = batchsize
-	}
-	for i := 0; i < workerNum; i++ {
-		wgBatchReply.Add(1)
+		if batchsize < workerNum {
+			workerNum = batchsize
+		}
+		for i := 0; i < workerNum; i++ {
+			wgBatchReply.Add(1)
 
-		go func(jobChan <-chan int) {
-			defer wgBatchReply.Done()
+			go func(jobChan <-chan int) {
+				defer wgBatchReply.Done()
 
-			for j := range jobChan {
-				pubShares := make([]*share.PubShare, len(activeAddrs))
+				for j := range jobChan {
+					pubShares := make([]*share.PubShare, len(activeAddrs))
 
-				for k := 0; k < len(activeAddrs); k++ {
-					resp := respondArr[k].GetShareAndProof()[j]
+					for k := 0; k < len(activeAddrs); k++ {
+						resp := respondArr[k].GetShareAndProof()[j]
 
-					err = checkDecryptionProof(resp, ciphertexts[j].K)
-					if err != nil {
-						dela.Logger.Error().Msgf("failed to verify the decryption proof : %v", err)
-					} else {
-						pubShares[k] = &share.PubShare{
-							I: int(resp.I),
-							V: resp.V,
+						err = checkDecryptionProof(resp, ciphertexts[j].K)
+						if err != nil {
+							dela.Logger.Error().Msgf("failed to verify the decryption proof : %v", err)
+						} else {
+							pubShares[k] = &share.PubShare{
+								I: int(resp.I),
+								V: resp.V,
+							}
 						}
 					}
-				}
-				res, err := share.RecoverCommit(suite, pubShares, len(addrs), len(addrs))
+					res, err := share.RecoverCommit(suite, pubShares, len(addrs), len(addrs))
 
-				if err != nil {
-					dela.Logger.Error().Msgf("failed to recover the message : %v", err)
+					if err != nil {
+						dela.Logger.Error().Msgf("failed to recover the message : %v", err)
+					}
+					decryptedMessage[j], err = res.Data()
+					if err != nil {
+						dela.Logger.Error().Msgf("failed to get embeded data : %v", err)
+					}
 				}
-				decryptedMessage[j], err = res.Data()
-				if err != nil {
-					dela.Logger.Error().Msgf("failed to get embeded data : %v", err)
+			}(jobChan)
+		}
+
+		wgBatchReply.Wait()
+	} else {
+
+		pubShares := make([]*share.PubShare, len(activeAddrs))
+
+		for k := 0; k < len(activeAddrs); k++ {
+			resp := respondArr[k].GetShareAndProof()[0]
+
+			err = checkDecryptionProof(resp, ciphertexts[0].K)
+			if err != nil {
+				dela.Logger.Error().Msgf("failed to verify the decryption proof : %v", err)
+			} else {
+				pubShares[k] = &share.PubShare{
+					I: int(resp.I),
+					V: resp.V,
 				}
 			}
-		}(jobChan)
-	}
+		}
+		res, err := share.RecoverCommit(suite, pubShares, len(addrs), len(addrs))
 
-	wgBatchReply.Wait()
+		if err != nil {
+			dela.Logger.Error().Msgf("failed to recover the message : %v", err)
+		}
+		decryptedMessage[0], err = res.Data()
+		if err != nil {
+			dela.Logger.Error().Msgf("failed to get embeded data : %v", err)
+		}
+
+	}
 
 	return decryptedMessage, nil
 }
@@ -488,13 +524,13 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 
 	// We don't need to send the old threshold or old public keys to the old or
 	// common nodes
-	messageOld := types.NewResharingRequest(thresholdNew, 0, addrsNew, nil, pubkeysNew, nil)
+	//messageOld := types.NewResharingRequest(thresholdNew, 0, addrsNew, nil, pubkeysNew, nil)
 
 	// Send the resharing request to the old and common nodes
-	err = <-sender.Send(messageOld, a.startRes.GetParticipants()...)
-	if err != nil {
-		return xerrors.Errorf("failed to send resharing request: %v", err)
-	}
+	// err = <-sender.Send(messageOld, a.startRes.GetParticipants()...)
+	// if err != nil {
+	// 	return xerrors.Errorf("failed to send resharing request: %v", err)
+	// }
 
 	// First find the set of new nodes that are not common between the old and
 	// new committee
@@ -505,7 +541,7 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 	messageNew := types.NewResharingRequest(thresholdNew, thresholdOld, addrsNew, a.startRes.GetParticipants(), pubkeysNew, pubkeysOld)
 
 	// Send the resharing request to the new but not common nodes
-	err = <-sender.Send(messageNew, addrsNewNotCommon...)
+	err = <-sender.Send(messageNew, append(a.startRes.GetParticipants(), addrsNewNotCommon...)...)
 	if err != nil {
 		return xerrors.Errorf("failed to send resharing request: %v", err)
 	}

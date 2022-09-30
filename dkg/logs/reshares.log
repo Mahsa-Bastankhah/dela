@@ -1,0 +1,11 @@
+2022/09/27 12:26:54 n old = 8 , t old = 8  ,n new = 8 , t new =  8  , common nodes = 0  , resharing time = 4.545817504 s
+2022/09/27 12:29:01 n old = 16 , t old = 16  ,n new = 16 , t new =  16  , common nodes = 0  , resharing time = 40.365014862 s
+2022/09/27 13:53:11 n old = 32 , t old = 32  ,n new = 32 , t new =  32  , common nodes = 0  , set up time = 144.019439039 s ,resharing time = 410.820211954 s
+2022/09/29 17:23:02 n old = 16 , t old = 16  ,n new = 16 , t new =  16  , common nodes = 0  , set up time = 14.31180096 s ,resharing time = 39.316860037 s
+2022/09/29 21:15:52 n old = 64 , t old = 64  ,n new = 10 , t new =  64  , common nodes = 54  , set up time = 353.905176326 s ,resharing time = 439.651335786 s
+2022/09/29 22:02:02 n old = 75 , t old = 75  ,n new = 25 , t new =  25  , common nodes = 0  , set up time = 614.538792739 s ,resharing time = 179.096836622 s
+2022/09/29 22:06:25 n old = 48 , t old = 48  ,n new = 16 , t new =  16  , common nodes = 0  , set up time = 140.958584426 s ,resharing time = 50.175094797 s
+2022/09/29 22:38:44 n old = 48 , t old = 48  ,n new = 16 , t new =  16  , common nodes = 0  , set up time = 137.51231468 s ,resharing time = 48.545407168 s
+2022/09/29 22:43:05 n old = 24 , t old = 24  ,n new = 8 , t new =  8  , common nodes = 0  , set up time = 15.578777395 s ,resharing time = 5.478164494 s
+2022/09/29 22:44:30 n old = 12 , t old = 12  ,n new = 4 , t new =  4  , common nodes = 0  , set up time = 2.274001136 s ,resharing time = 0.697297604 s
+2022/09/29 22:46:03 n old = 6 , t old = 6  ,n new = 2 , t new =  2  , common nodes = 0  , set up time = 0.364100639 s ,resharing time = 0.266394944 s

@@ -1,0 +1,7 @@
+
+2022/09/29 22:48:03 n = 8 , transaction writting time = 0.360902686 s
+2022/09/29 22:48:42 n = 16 , transaction writting time = 0.460028252 s
+2022/09/29 22:48:58 n = 32 , transaction writting time = 0.670933782 s
+2022/09/29 22:49:29 n = 64 , transaction writting time = 1.602457748 s
+2022/09/29 18:38:21 n = 100 , transaction writting time = 2.439596292 s
+2022/09/29 18:42:51 n = 100 , transaction writting time = 2.343630392 s

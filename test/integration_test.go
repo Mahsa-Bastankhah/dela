@@ -3,11 +3,15 @@ package integration
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	accessContract "go.dedis.ch/dela/contracts/access"
@@ -25,18 +29,29 @@ func init() {
 // Use the value contract
 // Check the state
 func TestIntegration_Value_Simple(t *testing.T) {
+
+	f, err := os.OpenFile("./transactionDelay.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	require.NoError(t, err)
+	defer f.Close()
+	wrt := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(wrt)
 	dir, err := ioutil.TempDir(os.TempDir(), "dela-integration-test")
 	require.NoError(t, err)
 
 	t.Logf("using temps dir %s", dir)
 
 	defer os.RemoveAll(dir)
-
-	nodes := []dela{
-		newDelaNode(t, filepath.Join(dir, "node1"), 0),
-		newDelaNode(t, filepath.Join(dir, "node2"), 0),
-		newDelaNode(t, filepath.Join(dir, "node3"), 0),
+	n := 64
+	nodes := make([]dela, n)
+	for i := 0; i < n; i++ {
+		nodes[i] = newDelaNode(t, filepath.Join(dir, fmt.Sprintf("node %v", i+1)), 0)
 	}
+
+	// nodes := []dela{
+	// 	newDelaNode(t, filepath.Join(dir, "node1"), 0),
+	// 	newDelaNode(t, filepath.Join(dir, "node2"), 0),
+	// 	newDelaNode(t, filepath.Join(dir, "node3"), 0),
+	// }
 
 	nodes[0].Setup(nodes[1:]...)
 
@@ -81,7 +96,11 @@ func TestIntegration_Value_Simple(t *testing.T) {
 		{Key: "value:value", Value: []byte("value1")},
 		{Key: "value:command", Value: []byte("WRITE")},
 	}
+	start := time.Now()
 	addAndWait(t, manager, nodes[0].(cosiDelaNode), args...)
+	end := time.Since(start)
+
+	log.Printf("n = %d , transaction writting time = %v s", n, end.Seconds())
 
 	proof, err := nodes[0].GetOrdering().GetProof(key1)
 	require.NoError(t, err)

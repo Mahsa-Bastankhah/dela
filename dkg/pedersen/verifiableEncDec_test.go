@@ -39,8 +39,8 @@ func Test_verifiableEncDec_minoch(t *testing.T) {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	// setting up the dkg
-	n := 5
-	threshold := 5
+	n := 64
+	threshold := 64
 	batchSize := 100
 
 	minos := make([]mino.Mino, n)
@@ -125,16 +125,9 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 	// batchSizeSlice := []int{32, 64, 128, 256, 512, 1024, 2048}
 	batchSizeSlice := []int{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}
 
-	// initiating the log file for writing the delay and throughput data
-	f, err := os.OpenFile("../logs/test.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	require.NoError(t, err)
-	defer f.Close()
-	wrt := io.MultiWriter(os.Stdout, f)
-	log.SetOutput(wrt)
-
 	// setting up the dkg
-	n := 128
-	threshold := 128
+	n := 64
+	threshold := 64
 
 	minos := make([]mino.Mino, n)
 	dkgs := make([]dkg.DKG, n)
@@ -143,7 +136,7 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 	// creating GBar. we need a generator in order to follow the encryption and decryption protocol of https://arxiv.org/pdf/2205.08529.pdf /
 	// we take an agreed data among the participants and embed it as a point. the result is the generator that we are seeking
 	agreedData := make([]byte, 32)
-	_, err = rand.Read(agreedData)
+	_, err := rand.Read(agreedData)
 	require.NoError(t, err)
 	GBar := suite.Point().Embed(agreedData, keccak.New(agreedData))
 
@@ -213,6 +206,13 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 		for i := 0; i < batchSize; i++ {
 			require.Equal(t, keys[i], decrypted[i])
 		}
+
+		// initiating the log file for writing the delay and throughput data
+		f, err := os.OpenFile("../logs/test.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		require.NoError(t, err)
+		defer f.Close()
+		wrt := io.MultiWriter(os.Stdout, f)
+		log.SetOutput(wrt)
 
 		log.Printf("n = %d , batchSize = %d  ,decryption time = %v s, throughput =  %v tx/s , dkg setup time = %v s",
 			n, batchSize, decryptionTime.Seconds(), float32(batchSize)/float32(decryptionTime.Seconds()), float32(setupTime.Seconds()))

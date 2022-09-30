@@ -2,9 +2,13 @@ package pedersen
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
 	_ "net/http/pprof"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	_ "go.dedis.ch/dela/dkg/pedersen/json"
@@ -13,7 +17,7 @@ import (
 
 	"go.dedis.ch/dela/mino/minogrpc"
 	_ "go.dedis.ch/dela/mino/minogrpc"
-	"go.dedis.ch/dela/mino/router/tree"
+	"go.dedis.ch/dela/mino/router/flat"
 
 	"go.dedis.ch/dela/dkg"
 
@@ -160,9 +164,24 @@ func TestResharing_minoch(t *testing.T) {
 // the new commitee. Using minogrpc as the underlying network
 func TestResharing_minogrpc(t *testing.T) {
 
+	f, err := os.OpenFile("../logs/reshares.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	require.NoError(t, err)
+	defer f.Close()
+	wrt := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(wrt)
+
 	// Setting up the first dkg
-	nOld := 10
-	thresholdOld := 10
+	nOld := 6
+	thresholdOld := 6
+
+	// Setting up the second dkg
+	// nCommon is the number of nodes that are common between the new and the old committee
+	nCommon := 0
+
+	// The number of new added nodes. the new committee should have nCommon+nNew
+	// nodes in totatl
+	nNew := 2
+	thresholdNew := nCommon + nNew
 
 	minosOld := make([]mino.Mino, nOld)
 	dkgsOld := make([]dkg.DKG, nOld)
@@ -172,7 +191,7 @@ func TestResharing_minogrpc(t *testing.T) {
 	// Defining the addresses
 	for i := 0; i < nOld; i++ {
 		addr := minogrpc.ParseAddress("127.0.0.1", 0)
-		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, tree.NewRouter(minogrpc.NewAddressFactory()))
+		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, flat.NewRouter(minogrpc.NewAddressFactory()))
 		require.NoError(t, err)
 		defer minogrpc.GracefulStop()
 
@@ -203,7 +222,9 @@ func TestResharing_minogrpc(t *testing.T) {
 		actorsOld[i] = actor
 	}
 
-	_, err := actorsOld[1].Setup(fakeAuthority, thresholdOld)
+	start := time.Now()
+	_, err = actorsOld[0].Setup(fakeAuthority, thresholdOld)
+	dkgSetupTime := time.Since(start)
 	require.NoError(t, err, "setting up the firs dkg was not successful")
 
 	// Encrypt a message with the old committee public key. the new committee
@@ -212,15 +233,6 @@ func TestResharing_minogrpc(t *testing.T) {
 	K, C, remainder, err := actorsOld[0].Encrypt(message)
 	require.NoError(t, err, "encrypting the message was not successful")
 	require.Len(t, remainder, 0)
-
-	// Setting up the second dkg
-	// nCommon is the number of nodes that are common between the new and the old committee
-	nCommon := 5
-
-	// The number of new added nodes. the new committee should have nCommon+nNew
-	// nodes in totatl
-	nNew := 20
-	thresholdNew := nCommon + nNew
 
 	minosNew := make([]mino.Mino, nNew+nCommon)
 	dkgsNew := make([]dkg.DKG, nNew+nCommon)
@@ -238,7 +250,7 @@ func TestResharing_minogrpc(t *testing.T) {
 	// Defining the address of the new nodes.
 	for i := 0; i < nNew; i++ {
 		addr := minogrpc.ParseAddress("127.0.0.1", 0)
-		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, tree.NewRouter(minogrpc.NewAddressFactory()))
+		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, flat.NewRouter(minogrpc.NewAddressFactory()))
 		require.NoError(t, err)
 		defer minogrpc.GracefulStop()
 
@@ -283,13 +295,18 @@ func TestResharing_minogrpc(t *testing.T) {
 	}
 
 	// Resharing the committee secret among the new committee
+	fmt.Println("============== starting the resharing ==============")
 	fakeAuthority = NewAuthority(addrsNew, pubkeysNew)
+	start = time.Now()
 	err = actorsOld[0].Reshare(fakeAuthority, thresholdNew)
+	resharingTime := time.Since(start)
 	require.NoError(t, err, "Resharing was not successful")
-
+	fmt.Println("==============  finishing the resharing ==============")
 	// Comparing the public key of the old and the new committee
 	oldPubKey, err := actorsOld[0].GetPublicKey()
 	require.NoError(t, err)
+
+	fmt.Println("============== verifying the process ==============")
 
 	for _, actorNew := range actorsNew {
 		newPubKey, err := actorNew.GetPublicKey()
@@ -301,6 +318,9 @@ func TestResharing_minogrpc(t *testing.T) {
 		require.NoError(t, err, "decryption was not successful")
 		require.Equal(t, message, decrypted, "the new committee should be able to decrypt the messages encrypted by the old committee")
 	}
+
+	log.Printf("n old = %d , t old = %d  ,n new = %d , t new =  %d  , common nodes = %d  , set up time = %v s ,resharing time = %v s",
+		nOld, thresholdOld, nNew, thresholdNew, nCommon, dkgSetupTime.Seconds(), resharingTime.Seconds())
 }
 
 // This test creates a dkg committee then creates another committee (that can
