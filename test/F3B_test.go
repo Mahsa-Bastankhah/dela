@@ -225,7 +225,7 @@ func Test_F3B(t *testing.T) {
 
 		fmt.Println("decrypting the data ...")
 		// decryopting the symmetric key in batch
-		decrypted, err := actors[0].VerifiableDecrypt(ciphertexts)
+		decrypted, _, _, err := actors[0].VerifiableDecrypt(ciphertexts)
 		require.NoError(t, err)
 
 		// make sure that the decryption was correct

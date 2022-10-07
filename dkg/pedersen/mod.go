@@ -2,7 +2,6 @@ package pedersen
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -329,10 +328,10 @@ func (a *Actor) Decrypt(K, C kyber.Point) ([]byte, error) {
 // a discription can be found in https://arxiv.org/pdf/2205.08529.pdf / section 5.4 Protocol / ster 3: key reconstruction
 // TODO: perform a re-encryption instead of gathering the private shares, which
 // should never happen.
-func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, error) {
+func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int64, int64, error) {
 
 	if !a.startRes.Done() {
-		return nil, xerrors.Errorf("you must first initialize DKG. " +
+		return nil, 0, 0, xerrors.Errorf("you must first initialize DKG. " +
 			"Did you call setup() first?")
 	}
 
@@ -344,7 +343,7 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, err
 
 	sender, receiver, err := a.rpc.Stream(ctx, players)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create stream: %v", err)
+		return nil, 0, 0, xerrors.Errorf("failed to create stream: %v", err)
 	}
 
 	players = mino.NewAddresses(a.startRes.GetParticipants()...)
@@ -364,12 +363,7 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, err
 	// sending the decrypt request to the nodes
 	err = <-sender.Send(message, addrs...)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to send verifiable decrypt request: %v", err)
-	}
-
-	end := time.Since(start)
-	if batchsize < 128 {
-		fmt.Println("time sending the message, batchsize ", batchsize, " time : ", end)
+		return nil, 0, 0, xerrors.Errorf("failed to send verifiable decrypt request: %v", err)
 	}
 
 	var respondArr []types.VerifiableDecryptReply
@@ -382,18 +376,21 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, err
 		dela.Logger.Debug().Msgf("received the %d th share from %v\n", i, from)
 
 		if err != nil {
-			return [][]byte{}, xerrors.Errorf("stream stopped unexpectedly: %v", err)
+			return [][]byte{}, 0, 0, xerrors.Errorf("stream stopped unexpectedly: %v", err)
 		} else {
 
 			shareAndProof, ok := message.(types.VerifiableDecryptReply)
 			if !ok {
-				return [][]byte{}, xerrors.Errorf("got unexpected reply, expected "+
+				return [][]byte{}, 0, 0, xerrors.Errorf("got unexpected reply, expected "+
 					"%T but got: %T", shareAndProof, message)
 			}
 			respondArr = append(respondArr, shareAndProof)
 			activeAddrs = append(activeAddrs, addrs[i])
 		}
 	}
+
+	receivingSharesTime := time.Since(start).Milliseconds()
+	start = time.Now()
 
 	// the final decrypted message
 	decryptedMessage := make([][]byte, batchsize)
@@ -476,7 +473,9 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, err
 
 	}
 
-	return decryptedMessage, nil
+	decryptionTime := time.Since(start).Milliseconds()
+
+	return decryptedMessage, receivingSharesTime, decryptionTime, nil
 }
 
 // Reshare implements dkg.Actor. It recreates the DKG with an updated list of

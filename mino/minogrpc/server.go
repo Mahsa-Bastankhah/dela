@@ -13,11 +13,12 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"go.dedis.ch/dela/internal/debugsync"
 	"math/big"
 	"net"
 	"net/url"
 	"time"
+
+	"go.dedis.ch/dela/internal/debugsync"
 
 	"go.dedis.ch/dela"
 	"go.dedis.ch/dela/internal/tracing"
@@ -53,7 +54,7 @@ const (
 
 	// defaultMinConnectTimeout is the minimum amount of time we are willing to
 	// wait for a grpc connection to complete
-	defaultMinConnectTimeout = 60 * time.Second
+	defaultMinConnectTimeout = 60 * time.Minute
 )
 
 var getTracerForAddr = tracing.GetTracerForAddr

@@ -106,7 +106,7 @@ func Test_verifiableEncDec_minoch(t *testing.T) {
 
 	// decrypting the batch ciphertext message
 	fmt.Println("decrypting the ciphertext ...")
-	decrypted, err := actors[0].VerifiableDecrypt(ciphertexts)
+	decrypted, _, _, err := actors[0].VerifiableDecrypt(ciphertexts)
 	require.NoError(t, err)
 	for i := 0; i < batchSize; i++ {
 		require.Equal(t, keys[i], decrypted[i])
@@ -199,7 +199,7 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 		// decryopting the batch ciphertext message
 		fmt.Println("decrypting the batch ...")
 		start = time.Now()
-		decrypted, err := actors[0].VerifiableDecrypt(ciphertexts)
+		decrypted, _, _, err := actors[0].VerifiableDecrypt(ciphertexts)
 		decryptionTime := time.Since(start)
 		require.NoError(t, err)
 

@@ -9,3 +9,5 @@
 2022/09/29 22:43:05 n old = 24 , t old = 24  ,n new = 8 , t new =  8  , common nodes = 0  , set up time = 15.578777395 s ,resharing time = 5.478164494 s
 2022/09/29 22:44:30 n old = 12 , t old = 12  ,n new = 4 , t new =  4  , common nodes = 0  , set up time = 2.274001136 s ,resharing time = 0.697297604 s
 2022/09/29 22:46:03 n old = 6 , t old = 6  ,n new = 2 , t new =  2  , common nodes = 0  , set up time = 0.364100639 s ,resharing time = 0.266394944 s
+2022/10/07 18:19:58 n old = 6 , t old = 6  ,n new = 2 , t new =  2  , common nodes = 0  , set up time = 0.310052549 s ,resharing time = 0.247872863 s
+2022/10/07 18:20:29 n old = 8 , t old = 8  ,n new = 0 , t new =  8  , common nodes = 8  , set up time = 0.67890739 s ,resharing time = 0.585067111 s

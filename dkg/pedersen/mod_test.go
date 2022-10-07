@@ -1,8 +1,9 @@
 package pedersen
 
 import (
-	"go.dedis.ch/dela/mino/router/flat"
 	"testing"
+
+	"go.dedis.ch/dela/mino/router/flat"
 
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/dela/crypto"

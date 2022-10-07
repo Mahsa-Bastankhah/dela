@@ -171,16 +171,16 @@ func TestResharing_minogrpc(t *testing.T) {
 	log.SetOutput(wrt)
 
 	// Setting up the first dkg
-	nOld := 6
-	thresholdOld := 6
+	nOld := 8
+	thresholdOld := 8
 
 	// Setting up the second dkg
 	// nCommon is the number of nodes that are common between the new and the old committee
-	nCommon := 0
+	nCommon := 8
 
 	// The number of new added nodes. the new committee should have nCommon+nNew
 	// nodes in totatl
-	nNew := 2
+	nNew := 0
 	thresholdNew := nCommon + nNew
 
 	minosOld := make([]mino.Mino, nOld)
