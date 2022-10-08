@@ -483,7 +483,7 @@ func (a verifiableDecryptAction) Execute(ctx node.Context) error {
 
 	}
 
-	decrypted, err := actor.VerifiableDecrypt(ciphertextSlice)
+	decrypted, _, _, err := actor.VerifiableDecrypt(ciphertextSlice)
 	if err != nil {
 		return xerrors.Errorf("failed to decrypt: %v", err)
 	}

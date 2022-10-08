@@ -18,7 +18,7 @@ import (
 
 	"go.dedis.ch/dela/mino/minogrpc"
 	_ "go.dedis.ch/dela/mino/minogrpc"
-	"go.dedis.ch/dela/mino/router/flat"
+	"go.dedis.ch/dela/mino/router/tree"
 
 	"go.dedis.ch/dela/dkg"
 
@@ -80,7 +80,7 @@ func TestResharingRecords(t *testing.T) {
 	// Defining the addresses
 	for i := 0; i < nOld; i++ {
 		addr := minogrpc.ParseAddress("127.0.0.1", 0)
-		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, flat.NewRouter(minogrpc.NewAddressFactory()))
+		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, tree.NewRouter(minogrpc.NewAddressFactory()))
 		require.NoError(t, err)
 		defer minogrpc.GracefulStop()
 
@@ -139,7 +139,7 @@ func TestResharingRecords(t *testing.T) {
 	// Defining the address of the new nodes.
 	for i := 0; i < nNew; i++ {
 		addr := minogrpc.ParseAddress("127.0.0.1", 0)
-		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, flat.NewRouter(minogrpc.NewAddressFactory()))
+		minogrpc, err := minogrpc.NewMinogrpc(addr, nil, tree.NewRouter(minogrpc.NewAddressFactory()))
 		require.NoError(t, err)
 		defer minogrpc.GracefulStop()
 

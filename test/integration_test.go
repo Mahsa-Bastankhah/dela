@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -19,6 +21,7 @@ import (
 	"go.dedis.ch/dela/core/txn/signed"
 	"go.dedis.ch/dela/crypto/bls"
 	"go.dedis.ch/dela/crypto/loader"
+	"golang.org/x/xerrors"
 )
 
 func init() {
@@ -37,6 +40,8 @@ func TestIntegration_Value_Simple(t *testing.T) {
 	log.SetOutput(wrt)
 	dir, err := ioutil.TempDir(os.TempDir(), "dela-integration-test")
 	require.NoError(t, err)
+
+	timeout := time.Second * 10 // transaction inclusion timeout
 
 	t.Logf("using temps dir %s", dir)
 
@@ -83,7 +88,8 @@ func TestIntegration_Value_Simple(t *testing.T) {
 		{Key: "access:identity", Value: []byte(base64.StdEncoding.EncodeToString(pubKeyBuf))},
 		{Key: "access:command", Value: []byte("GRANT")},
 	}
-	addAndWait(t, manager, nodes[0].(cosiDelaNode), args...)
+	err = addAndWait(t, timeout, manager, nodes[0].(cosiDelaNode), args...)
+	require.NoError(t, err)
 
 	key1 := make([]byte, 32)
 
@@ -97,7 +103,7 @@ func TestIntegration_Value_Simple(t *testing.T) {
 		{Key: "value:command", Value: []byte("WRITE")},
 	}
 	start := time.Now()
-	addAndWait(t, manager, nodes[0].(cosiDelaNode), args...)
+	addAndWait(t, timeout, manager, nodes[0].(cosiDelaNode), args...)
 	end := time.Since(start)
 
 	log.Printf("n = %d , transaction writting time = %v s", n, end.Seconds())
@@ -117,39 +123,40 @@ func TestIntegration_Value_Simple(t *testing.T) {
 		{Key: "value:value", Value: []byte("value2")},
 		{Key: "value:command", Value: []byte("WRITE")},
 	}
-	addAndWait(t, manager, nodes[0].(cosiDelaNode), args...)
+	err = addAndWait(t, timeout, manager, nodes[0].(cosiDelaNode), args...)
+	require.NoError(t, err)
 }
 
 // -----------------------------------------------------------------------------
 // Utility functions
 
-// func addAndWait(t *testing.T, manager txn.Manager, node cosiDelaNode, args ...txn.Arg) {
-// 	manager.Sync()
+func addAndWait(t *testing.T, to time.Duration, manager txn.Manager, node cosiDelaNode, args ...txn.Arg) error {
+	manager.Sync()
 
-// 	tx, err := manager.Make(args...)
-// 	require.NoError(t, err)
+	tx, err := manager.Make(args...)
+	require.NoError(t, err)
 
-// 	err = node.GetPool().Add(tx)
-// 	require.NoError(t, err)
+	err = node.GetPool().Add(tx)
+	require.NoError(t, err)
 
-// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-// 	defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), to)
+	defer cancel()
 
-// 	events := node.GetOrdering().Watch(ctx)
+	events := node.GetOrdering().Watch(ctx)
 
-// 	for event := range events {
-// 		for _, result := range event.Transactions {
-// 			tx := result.GetTransaction()
+	for event := range events {
+		for _, result := range event.Transactions {
+			tx := result.GetTransaction()
 
-// 			if bytes.Equal(tx.GetID(), tx.GetID()) {
-// 				accepted, err := event.Transactions[0].GetStatus()
-// 				require.Empty(t, err)
+			if bytes.Equal(tx.GetID(), tx.GetID()) {
+				accepted, err := event.Transactions[0].GetStatus()
+				require.Empty(t, err)
 
-// 				require.True(t, accepted)
-// 				return
-// 			}
-// 		}
-// 	}
+				require.True(t, accepted)
+				return nil
+			}
+		}
+	}
 
-// 	t.Error("transaction not found")
-// }
+	return xerrors.Errorf("transaction not found")
+}

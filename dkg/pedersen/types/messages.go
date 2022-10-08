@@ -20,9 +20,12 @@ type Ciphertext struct {
 	GBar kyber.Point  // GBar
 }
 
-// the ShareAndProof provided by the verifiable decryption function
-// a discription can be found in https://arxiv.org/pdf/2205.08529.pdf
-// the equivalent of each parameter in the paper is written in front of it
+// ShareAndProof is the ShareAndProof provided by the verifiable decryption
+// function.
+//
+//	see: https://arxiv.org/pdf/2205.08529.pdf
+//
+// The equivalent of each parameter in the paper is mentioned
 type ShareAndProof struct {
 	V  kyber.Point
 	I  int64
@@ -69,12 +72,12 @@ func (s Start) GetThreshold() int {
 
 // GetAddresses returns the list of addresses.
 func (s Start) GetAddresses() []mino.Address {
-	return append([]mino.Address{}, s.addresses...)
+	return s.addresses
 }
 
 // GetPublicKeys returns the list of public keys.
 func (s Start) GetPublicKeys() []kyber.Point {
-	return append([]kyber.Point{}, s.pubkeys...)
+	return s.pubkeys
 }
 
 // Serialize implements serde.Message. It looks up the format and returns the
@@ -90,15 +93,15 @@ func (s Start) Serialize(ctx serde.Context) ([]byte, error) {
 	return data, nil
 }
 
-// ResharingRequest is the message the initiator of the resharing protocol
+// StartResharing is the message the initiator of the resharing protocol
 // should send to all the old nodes.
 //
 // - implements serde.Message
-type ResharingRequest struct {
+type StartResharing struct {
 	// New threshold
-	TNew int
+	tNew int
 	// Old threshold
-	TOld int
+	tOld int
 	// The full list of addresses that will participate in the new DKG
 	addrsNew []mino.Address
 	// The full list of addresses of old dkg members
@@ -109,12 +112,12 @@ type ResharingRequest struct {
 	pubkeysOld []kyber.Point
 }
 
-// NewResharingRequest creates a new start message.
-func NewResharingRequest(TNew int, TOld int, addrsNew []mino.Address, addrsOld []mino.Address,
-	pubkeysNew []kyber.Point, pubkeysOld []kyber.Point) ResharingRequest {
-	return ResharingRequest{
-		TNew:       TNew,
-		TOld:       TOld,
+// NewStartResharing creates a new start resharing message.
+func NewStartResharing(tNew int, tOld int, addrsNew []mino.Address, addrsOld []mino.Address,
+	pubkeysNew []kyber.Point, pubkeysOld []kyber.Point) StartResharing {
+	return StartResharing{
+		tNew:       tNew,
+		tOld:       tOld,
 		addrsNew:   addrsNew,
 		addrsOld:   addrsOld,
 		pubkeysNew: pubkeysNew,
@@ -123,38 +126,38 @@ func NewResharingRequest(TNew int, TOld int, addrsNew []mino.Address, addrsOld [
 }
 
 // GetTNew returns the new threshold.
-func (r ResharingRequest) GetTNew() int {
-	return r.TNew
+func (r StartResharing) GetTNew() int {
+	return r.tNew
 }
 
 // GetTOld returns the old threshold.
-func (r ResharingRequest) GetTOld() int {
-	return r.TOld
+func (r StartResharing) GetTOld() int {
+	return r.tOld
 }
 
-// GetaddrsNew returns the list of new addresses.
-func (r ResharingRequest) GetAddrsNew() []mino.Address {
-	return append([]mino.Address{}, r.addrsNew...)
+// GetAddrsNew returns the list of new addresses.
+func (r StartResharing) GetAddrsNew() []mino.Address {
+	return r.addrsNew
 }
 
-// GetaddrsOld returns the list of old addresses.
-func (r ResharingRequest) GetAddrsOld() []mino.Address {
-	return append([]mino.Address{}, r.addrsOld...)
+// GetAddrsOld returns the list of old addresses.
+func (r StartResharing) GetAddrsOld() []mino.Address {
+	return r.addrsOld
 }
 
-// GetpubkeysNew returns the list of new public keys.
-func (r ResharingRequest) GetPubkeysNew() []kyber.Point {
-	return append([]kyber.Point{}, r.pubkeysNew...)
+// GetPubkeysNew returns the list of new public keys.
+func (r StartResharing) GetPubkeysNew() []kyber.Point {
+	return r.pubkeysNew
 }
 
-// GetpubkeysOld returns the list of old public keys.
-func (r ResharingRequest) GetPubkeysOld() []kyber.Point {
-	return append([]kyber.Point{}, r.pubkeysOld...)
+// GetPubkeysOld returns the list of old public keys.
+func (r StartResharing) GetPubkeysOld() []kyber.Point {
+	return r.pubkeysOld
 }
 
 // Serialize implements serde.Message. It looks up the format and returns the
 // serialized data for the resharingRequest message.
-func (r ResharingRequest) Serialize(ctx serde.Context) ([]byte, error) {
+func (r StartResharing) Serialize(ctx serde.Context) ([]byte, error) {
 	format := msgFormats.Get(ctx.GetFormat())
 
 	data, err := format.Encode(ctx, r)
@@ -186,22 +189,22 @@ func NewEncryptedDeal(dhkey, sig, nonce, cipher []byte) EncryptedDeal {
 
 // GetDHKey returns the Diffie-Helmann key in bytes.
 func (d EncryptedDeal) GetDHKey() []byte {
-	return append([]byte{}, d.dhkey...)
+	return d.dhkey
 }
 
 // GetSignature returns the signatures in bytes.
 func (d EncryptedDeal) GetSignature() []byte {
-	return append([]byte{}, d.signature...)
+	return d.signature
 }
 
 // GetNonce returns the nonce in bytes.
 func (d EncryptedDeal) GetNonce() []byte {
-	return append([]byte{}, d.nonce...)
+	return d.nonce
 }
 
 // GetCipher returns the cipher in bytes.
 func (d EncryptedDeal) GetCipher() []byte {
-	return append([]byte{}, d.cipher...)
+	return d.cipher
 }
 
 // Deal matches the attributes defined in kyber dkg.Deal.
@@ -230,7 +233,7 @@ func (d Deal) GetIndex() uint32 {
 
 // GetSignature returns the signature in bytes.
 func (d Deal) GetSignature() []byte {
-	return append([]byte{}, d.signature...)
+	return d.signature
 }
 
 // GetEncryptedDeal returns the encrypted deal.
@@ -250,33 +253,33 @@ func (d Deal) Serialize(ctx serde.Context) ([]byte, error) {
 	return data, nil
 }
 
-// DealResharing messages for resharing process
+// Reshare messages for resharing process
 // - implements serde.Message
-type DealResharing struct {
+type Reshare struct {
 	deal        Deal
-	PublicCoeff []kyber.Point
+	publicCoeff []kyber.Point
 }
 
-// NewDeal creates a new deal.
-func NewDealResharing(deal Deal, publicCoeff []kyber.Point) DealResharing {
-	return DealResharing{
+// NewReshare creates a new deal.
+func NewReshare(deal Deal, publicCoeff []kyber.Point) Reshare {
+	return Reshare{
 		deal:        deal,
-		PublicCoeff: publicCoeff,
+		publicCoeff: publicCoeff,
 	}
 }
 
 // GetDeal returns the deal.
-func (d DealResharing) GetDeal() Deal {
+func (d Reshare) GetDeal() Deal {
 	return d.deal
 }
 
-// GetDPublicCoeff returns the public coeff.
-func (d DealResharing) GetPublicCoeffs() []kyber.Point {
-	return d.PublicCoeff
+// GetPublicCoeffs returns the public coeff.
+func (d Reshare) GetPublicCoeffs() []kyber.Point {
+	return d.publicCoeff
 }
 
 // Serialize implements serde.Message.
-func (d DealResharing) Serialize(ctx serde.Context) ([]byte, error) {
+func (d Reshare) Serialize(ctx serde.Context) ([]byte, error) {
 	format := msgFormats.Get(ctx.GetFormat())
 
 	data, err := format.Encode(ctx, d)
@@ -309,7 +312,7 @@ func NewDealerResponse(index uint32, status bool, sessionID, sig []byte) DealerR
 
 // GetSessionID returns the session ID in bytes.
 func (dresp DealerResponse) GetSessionID() []byte {
-	return append([]byte{}, dresp.sessionID...)
+	return dresp.sessionID
 }
 
 // GetIndex returns the index.
@@ -324,7 +327,7 @@ func (dresp DealerResponse) GetStatus() bool {
 
 // GetSignature returns the signature in bytes.
 func (dresp DealerResponse) GetSignature() []byte {
-	return append([]byte{}, dresp.signature...)
+	return dresp.signature
 }
 
 // Response matches the attributes defined in kyber pedersen.Response.
@@ -436,7 +439,8 @@ func (req DecryptRequest) Serialize(ctx serde.Context) ([]byte, error) {
 	return data, nil
 }
 
-// VerifiableDecryptRequest is a message sent to request a verifiable decryption.
+// VerifiableDecryptRequest is a message sent to request a verifiable
+// decryption.
 //
 // - implements serde.Message
 type VerifiableDecryptRequest struct {
@@ -444,7 +448,6 @@ type VerifiableDecryptRequest struct {
 }
 
 // NewVerifiableDecryptRequest creates a new verifiable decryption request.
-
 func NewVerifiableDecryptRequest(ciphertexts []Ciphertext) VerifiableDecryptRequest {
 	return VerifiableDecryptRequest{
 		ciphertexts: ciphertexts,
@@ -457,12 +460,12 @@ func (req VerifiableDecryptRequest) GetCiphertexts() []Ciphertext {
 }
 
 // Serialize implements serde.Message.
-func (resp VerifiableDecryptRequest) Serialize(ctx serde.Context) ([]byte, error) {
+func (req VerifiableDecryptRequest) Serialize(ctx serde.Context) ([]byte, error) {
 	format := msgFormats.Get(ctx.GetFormat())
 
-	data, err := format.Encode(ctx, resp)
+	data, err := format.Encode(ctx, req)
 	if err != nil {
-		return nil, xerrors.Errorf("couldn't encode decrypt reply: %v", err)
+		return nil, xerrors.Errorf("couldn't encode verifiable decrypt request: %v", err)
 	}
 
 	return data, nil
@@ -506,22 +509,22 @@ func (resp DecryptReply) Serialize(ctx serde.Context) ([]byte, error) {
 	return data, nil
 }
 
-// VerifiableDecryptRequest is a message sent to request a verifiable decryption.
+// VerifiableDecryptReply is a message sent to request a verifiable
+// decryption.
 //
 // - implements serde.Message
 type VerifiableDecryptReply struct {
 	shareAndProof []ShareAndProof
 }
 
-// NewVerifiableDecryptRequest creates a new verifiable decryption request.
-
+// NewVerifiableDecryptReply creates a new verifiable decryption reply.
 func NewVerifiableDecryptReply(shareAndProof []ShareAndProof) VerifiableDecryptReply {
 	return VerifiableDecryptReply{
 		shareAndProof: shareAndProof,
 	}
 }
 
-// GetCiphertexts returns ciphertexts.
+// GetShareAndProof returns ShareAndProof.
 func (resp VerifiableDecryptReply) GetShareAndProof() []ShareAndProof {
 	return resp.shareAndProof
 }
@@ -532,7 +535,7 @@ func (resp VerifiableDecryptReply) Serialize(ctx serde.Context) ([]byte, error) 
 
 	data, err := format.Encode(ctx, resp)
 	if err != nil {
-		return nil, xerrors.Errorf("couldn't encode decrypt reply: %v", err)
+		return nil, xerrors.Errorf("couldn't encode verifiable decrypt reply: %v", err)
 	}
 
 	return data, nil

@@ -27,7 +27,8 @@ type Actor interface {
 	Encrypt(message []byte) (K, C kyber.Point, remainder []byte, err error)
 	Decrypt(K, C kyber.Point) ([]byte, error)
 
+	Reshare(co crypto.CollectiveAuthority, newThreshold int) error
+
 	VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int64, int64, error)
 	VerifiableEncrypt(message []byte, GBar kyber.Point) (ciphertext types.Ciphertext, remainder []byte, err error)
-	Reshare(co crypto.CollectiveAuthority, thresholdNew int) error
 }

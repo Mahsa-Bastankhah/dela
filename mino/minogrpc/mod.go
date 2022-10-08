@@ -1,6 +1,8 @@
 // Package minogrpc implements a network overlay using gRPC.
 //
 // Documentation Last Review: 07.10.2020
+//
+
 package minogrpc
 
 import (
@@ -10,13 +12,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"go.dedis.ch/dela/internal/debugsync"
 	"io"
 	"net"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"go.dedis.ch/dela/internal/debugsync"
 
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -216,7 +219,7 @@ func NewMinogrpc(listen net.Addr, public *url.URL, router router.Router, opts ..
 		Certificates: []tls.Certificate{{
 			Certificate: certsBuf,
 			Leaf:        certs[0],
-			PrivateKey:  tmpl.secret,
+			PrivateKey:  o.secret,
 		}},
 		MinVersion: tls.VersionTLS12,
 	})

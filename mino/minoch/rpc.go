@@ -7,15 +7,18 @@ package minoch
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"sync"
 
+	"go.dedis.ch/dela"
 	"go.dedis.ch/dela/mino"
 	"go.dedis.ch/dela/serde"
 	"golang.org/x/xerrors"
 )
+
+// bufSize defines the buffer size of channels used to store messages
+var bufSize = 10000
 
 // Envelope is the wrapper to send messages through streams.
 type Envelope struct {
@@ -141,12 +144,7 @@ func (c RPC) runFilters(req mino.Request) bool {
 // Stream implements mino.RPC. It simulates the stream by using the orchestrator
 // as the router for all the messages. They are redirected to the channel
 // associated with the address.
-// Stream implements mino.RPC. It simulates the stream by using the orchestrator
-// as the router for all the messages. They are redirected to the channel
-// associated with the address.
 func (c RPC) Stream(ctx context.Context, memship mino.Players) (mino.Sender, mino.Receiver, error) {
-	bufSize := 10000
-
 	in := make(chan Envelope, bufSize)
 	out := make(chan Envelope, bufSize)
 	errs := make(chan error, 1000)
@@ -178,7 +176,6 @@ func (c RPC) Stream(ctx context.Context, memship mino.Players) (mino.Sender, min
 
 			err := peer.rpcs[c.path].h.Stream(s, r)
 			if err != nil {
-				fmt.Println("Error:", err)
 				errs <- xerrors.Errorf("couldn't process: %v", err)
 			}
 		}(outs[addr.String()])
@@ -213,20 +210,18 @@ func (c RPC) Stream(ctx context.Context, memship mino.Players) (mino.Sender, min
 				return
 			case env := <-in:
 				for _, to := range env.to {
-					if to.(address).orchestrator {
-						select {
-						case orchRecv.out <- env:
-						default:
-							fmt.Println("FULL!! (orch)")
-							orchRecv.out <- env
-						}
-					} else {
-						select {
-						case outs[to.String()].out <- env:
-						default:
-							fmt.Println("FULL!!")
-							outs[to.String()].out <- env
-						}
+					output := orchRecv.out
+					if !to.(address).orchestrator {
+						output = outs[to.String()].out
+					}
+
+					// FIXME: use a crychan
+					select {
+					case output <- env:
+					default:
+						dela.Logger.Warn().Str("to", to.String()).
+							Str("from", env.from.String()).Msg("full")
+						output <- env
 					}
 				}
 			}

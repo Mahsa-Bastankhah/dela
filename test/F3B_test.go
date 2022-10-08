@@ -1,13 +1,9 @@
 package integration
 
 import (
-	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -29,12 +25,9 @@ import (
 	"go.dedis.ch/dela/dkg/pedersen/types"
 	"go.dedis.ch/dela/internal/testing/fake"
 
-	"net/http"
-
 	"go.dedis.ch/dela/mino"
 
 	"go.dedis.ch/dela/mino/minoch"
-	_ "go.dedis.ch/dela/mino/minoch"
 
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/kyber/v3/suites"
@@ -46,145 +39,148 @@ func init() {
 }
 
 func Test_F3B(t *testing.T) {
+	batchSizes := []int{1}
+	// numDKGs := []int{3, 10, 20, 30, 50, 70, 100}
+	numDKGs := []int{128}
 
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
-	//numWorkersSlice := []int{2, 4, 8}
-	batchSizeSlice := []int{8, 32, 64}
-
-	// logging the result
-	// f, err := os.OpenFile("../logs/test.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	// require.NoError(t, err)
-	// defer f.Close()
-	// wrt := io.MultiWriter(os.Stdout, f)
-	// log.SetOutput(wrt)
-
-	//start := time.Now()
-
-	fmt.Println("setting up the dkg ...")
-	n := 32
-	threshold := 32
-
-	// set up the dkg
-	minos := make([]mino.Mino, n)
-	dkgs := make([]dkg.DKG, n)
-	addrs := make([]mino.Address, n)
-
-	minoManager := minoch.NewManager()
-
-	// initializing the addresses
-	for i := 0; i < n; i++ {
-		minogrpc := minoch.MustCreate(minoManager, fmt.Sprintf("addr %d", i))
-		minos[i] = minogrpc
-		addrs[i] = minogrpc.GetAddress()
+	for _, batchSize := range batchSizes {
+		for _, numDKG := range numDKGs {
+			t.Run(fmt.Sprintf("batch size %d num dkg %d", batchSize, numDKG), f3bScenario(batchSize, numDKG, 3))
+		}
 	}
+}
 
-	pubkeys := make([]kyber.Point, len(minos))
+func f3bScenario(batchSize, numDKG, numNodes int) func(t *testing.T) {
+	return func(t *testing.T) {
 
-	for i, mino := range minos {
-		dkg, pubkey := pedersen.NewPedersen(mino)
-		dkgs[i] = dkg
-		pubkeys[i] = pubkey
-	}
+		require.Greater(t, numDKG, 0)
+		require.Greater(t, numNodes, 0)
+		require.GreaterOrEqual(t, numDKG, numNodes)
 
-	actors := make([]dkg.Actor, n)
-	for i := 0; i < n; i++ {
-		actor, err := dkgs[i].Listen()
+		to := time.Second * 10 // transaction inclusion timeout
+
+		// set up the dkg
+		minos := make([]mino.Mino, numDKG)
+		dkgs := make([]dkg.DKG, numDKG)
+		addrs := make([]mino.Address, numDKG)
+
+		minoManager := minoch.NewManager()
+
+		// initializing the addresses
+		for i := 0; i < numDKG; i++ {
+			minogrpc := minoch.MustCreate(minoManager, fmt.Sprintf("addr %d", i))
+			minos[i] = minogrpc
+			addrs[i] = minogrpc.GetAddress()
+		}
+
+		pubkeys := make([]kyber.Point, len(minos))
+
+		for i, mino := range minos {
+			dkg, pubkey := pedersen.NewPedersen(mino)
+			dkgs[i] = dkg
+			pubkeys[i] = pubkey
+		}
+
+		actors := make([]dkg.Actor, numDKG)
+		for i := 0; i < numDKG; i++ {
+			actor, err := dkgs[i].Listen()
+			require.NoError(t, err)
+			actors[i] = actor
+		}
+
+		fakeAuthority := NewAuthority(addrs, pubkeys)
+		start := time.Now()
+		_, err := actors[0].Setup(fakeAuthority, numDKG)
 		require.NoError(t, err)
-		actors[i] = actor
-	}
 
-	fakeAuthority := NewAuthority(addrs, pubkeys)
-	_, err := actors[0].Setup(fakeAuthority, threshold)
-	require.NoError(t, err)
+		setupTime := time.Since(start)
+		t.Logf("setup done in %s", setupTime)
 
-	// timing the dkg set up
-	//dkgSettingTime := time.Since(start)
+		// setting up the blockchain
 
-	//setting up the blockchain
-	fmt.Println("setting up the dela blockchain ...")
-	dir, err := ioutil.TempDir(os.TempDir(), "dela-integration-test")
-	require.NoError(t, err)
+		dir, err := os.MkdirTemp("", "dela-integration-test")
+		require.NoError(t, err)
 
-	t.Logf("using temps dir %s", dir)
+		t.Logf("using temps dir %s", dir)
 
-	defer os.RemoveAll(dir)
+		defer os.RemoveAll(dir)
 
-	// running the dela blockchain with 3 nodes
-	nodes := []dela{
-		newDelaNode(t, filepath.Join(dir, "node1"), 0),
-		newDelaNode(t, filepath.Join(dir, "node2"), 0),
-		newDelaNode(t, filepath.Join(dir, "node3"), 0),
-	}
+		nodes := make([]dela, numNodes)
 
-	nodes[0].Setup(nodes[1:]...)
+		for i := range nodes {
+			nodes[i] = newDelaNode(t, filepath.Join(dir, fmt.Sprintf("node%d", i)), 0)
+		}
 
-	l := loader.NewFileLoader(filepath.Join(dir, "private.key"))
+		nodes[0].Setup(nodes[1:]...)
 
-	//creating a new client/signer
-	signerdata, err := l.LoadOrCreate(newKeyGenerator())
-	require.NoError(t, err)
+		l := loader.NewFileLoader(filepath.Join(dir, "private.key"))
 
-	signer, err := bls.NewSignerFromBytes(signerdata)
-	require.NoError(t, err)
+		// creating a new client/signer
+		signerdata, err := l.LoadOrCreate(newKeyGenerator())
+		require.NoError(t, err)
 
-	pubKey := signer.GetPublicKey()
-	cred := accessContract.NewCreds(aKey[:])
+		signer, err := bls.NewSignerFromBytes(signerdata)
+		require.NoError(t, err)
 
-	for _, node := range nodes {
-		node.GetAccessService().Grant(node.(cosiDelaNode).GetAccessStore(), cred, pubKey)
-	}
+		pubKey := signer.GetPublicKey()
+		cred := accessContract.NewCreds(aKey[:])
 
-	manager := signed.NewManager(signer, &txClient{})
+		for _, node := range nodes {
+			node.GetAccessService().Grant(node.(cosiDelaNode).GetAccessStore(), cred, pubKey)
+		}
 
-	pubKeyBuf, err := signer.GetPublicKey().MarshalBinary()
-	require.NoError(t, err)
+		manager := signed.NewManager(signer, &txClient{})
 
-	// sending the grant transaction to the blockchain
-	args := []txn.Arg{
-		{Key: "go.dedis.ch/dela.ContractArg", Value: []byte("go.dedis.ch/dela.Access")},
-		{Key: "access:grant_id", Value: []byte(hex.EncodeToString(valueAccessKey[:]))},
-		{Key: "access:grant_contract", Value: []byte("go.dedis.ch/dela.Value")},
-		{Key: "access:grant_command", Value: []byte("all")},
-		{Key: "access:identity", Value: []byte(base64.StdEncoding.EncodeToString(pubKeyBuf))},
-		{Key: "access:command", Value: []byte("GRANT")},
-	}
+		pubKeyBuf, err := signer.GetPublicKey().MarshalBinary()
+		require.NoError(t, err)
 
-	// waiting for the confirmation of the transaction
-	addAndWait(t, manager, nodes[0].(cosiDelaNode), args...)
+		// sending the grant transaction to the blockchain
+		args := []txn.Arg{
+			{Key: "go.dedis.ch/dela.ContractArg", Value: []byte("go.dedis.ch/dela.Access")},
+			{Key: "access:grant_id", Value: []byte(hex.EncodeToString(valueAccessKey[:]))},
+			{Key: "access:grant_contract", Value: []byte("go.dedis.ch/dela.Value")},
+			{Key: "access:grant_command", Value: []byte("all")},
+			{Key: "access:identity", Value: []byte(base64.StdEncoding.EncodeToString(pubKeyBuf))},
+			{Key: "access:command", Value: []byte("GRANT")},
+		}
 
-	// creating GBar. we need a generator in order to follow the encryption and decryption protocol of https://arxiv.org/pdf/2205.08529.pdf /
-	// we take an agreed data among the participants and embed it as a point. the result is the generator that we are seeking
-	var suite = suites.MustFind("Ed25519")
-	agreedData := make([]byte, 32)
-	_, err = rand.Read(agreedData)
-	require.NoError(t, err)
-	gBar := suite.Point().Embed(agreedData, keccak.New(agreedData))
+		// waiting for the confirmation of the transaction
+		err = addAndWait(t, to, manager, nodes[0].(cosiDelaNode), args...)
+		require.NoError(t, err)
 
-	// creating the symmetric keys in batch. we process the transactions in batch to increase the throughput
-	// for more information refer to https://arxiv.org/pdf/2205.08529.pdf / page 6 / step 1 (write transaction)
-	fmt.Println("encrypting the data ...")
+		// creating GBar. we need a generator in order to follow the encryption and
+		// decryption protocol of https://arxiv.org/pdf/2205.08529.pdf / we take an
+		// agreed data among the participants and embed it as a point. the result is
+		// the generator that we are seeking
+		var suite = suites.MustFind("Ed25519")
+		agreedData := make([]byte, 32)
+		_, err = rand.Read(agreedData)
+		require.NoError(t, err)
+		gBar := suite.Point().Embed(agreedData, keccak.New(agreedData))
 
-	for _, batchSize := range batchSizeSlice {
+		// creating the symmetric keys in batch. we process the transactions in
+		// batch to increase the throughput for more information refer to
+		// https://arxiv.org/pdf/2205.08529.pdf / page 6 / step 1 (write
+		// transaction)
+
 		// the write transaction arguments
 		argSlice := make([][]txn.Arg, batchSize)
 
-		//numWorkers := numWorkersSlice[i]
 		var ciphertexts []types.Ciphertext
 
-		const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		keys := make([][]byte, batchSize)
-		//Create a Write instance
-		for i := 0; i < batchSize; i++ {
-			keys[i] = make([]byte, 29)
-			for j := range keys[i] {
-				keys[i][j] = letterBytes[rand.Intn(len(letterBytes))]
-			}
+		// generate random messages to be encrypted
+		keys := make([][29]byte, batchSize)
+		for i := range keys {
+			_, err = rand.Read(keys[i][:])
+			require.NoError(t, err)
+		}
 
+		start = time.Now()
+
+		// Create a Write instance
+		for i := 0; i < batchSize; i++ {
 			// Encrypting the symmetric key
-			ciphertext, remainder, err := actors[0].VerifiableEncrypt(keys[i], gBar)
+			ciphertext, remainder, err := actors[0].VerifiableEncrypt(keys[i][:], gBar)
 			require.NoError(t, err)
 			require.Len(t, remainder, 0)
 
@@ -208,7 +204,7 @@ func Test_F3B(t *testing.T) {
 			Ck = append(Ck, Ebytes[:]...)
 			Ck = append(Ck, Fbytes[:]...)
 
-			//creating the transaction and write the data
+			// creating the transaction and write the data
 			argSlice[i] = []txn.Arg{
 				{Key: "go.dedis.ch/dela.ContractArg", Value: []byte("go.dedis.ch/dela.Value")},
 				{Key: "value:key", Value: []byte("key")},
@@ -217,65 +213,35 @@ func Test_F3B(t *testing.T) {
 				{Key: "value:command", Value: []byte("WRITE")},
 			}
 
-			// we read the recorded data on the blockchain and make sure that the data was submitted corrrectly
-			readCk := addAndWait(t, manager, nodes[0].(cosiDelaNode), argSlice[i]...)
-			require.Equal(t, readCk, Ck, "correct Ck should be retrived from the blockchain")
-
+			// we read the recorded data on the blockchain and make sure that
+			// the data was submitted correctly
+			err = addAndWait(t, to, manager, nodes[0].(cosiDelaNode), argSlice[i]...)
+			require.NoError(t, err)
 		}
 
-		fmt.Println("decrypting the data ...")
-		// decryopting the symmetric key in batch
+		submitTime := time.Since(start)
+		t.Logf("submit batch: %s", submitTime)
+
+		start = time.Now()
+
+		// decrypting the symmetric key in batch
 		decrypted, _, _, err := actors[0].VerifiableDecrypt(ciphertexts)
 		require.NoError(t, err)
 
+		decryptTime := time.Since(start)
+		t.Logf("decrypt batch: %s", decryptTime)
+
 		// make sure that the decryption was correct
-		fmt.Println("verify the decryption ...")
 		for i := 0; i < batchSize; i++ {
-			require.Equal(t, keys[i], decrypted[i])
+			require.Equal(t, keys[i][:], decrypted[i])
 		}
 
-		// log.Printf("number of nodes in the secret committee = %d , number of workers = %d , batch size = %d ,Key reconstruction time = %v s, throughput =  %v tx/s , dkg setup time = %v s",
-		// 	n, numWorkers,
-		// 	batchSize, elapsed/1000, 1000*float32(batchSize)/elapsed, float32(dkgSettingTime/time.Second))
+		fmt.Println("Setup,\tSubmit,\tDecrypt")
+		fmt.Printf("%d,\t%d,\t%d\n", setupTime.Milliseconds(), submitTime.Milliseconds(), decryptTime.Milliseconds())
 	}
-
 }
 
-// Utility functions
-
-func addAndWait(t *testing.T, manager txn.Manager, node cosiDelaNode, args ...txn.Arg) []byte {
-
-	manager.Sync()
-
-	tx, err := manager.Make(args...)
-	require.NoError(t, err)
-
-	err = node.GetPool().Add(tx)
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
-	defer cancel()
-
-	events := node.GetOrdering().Watch(ctx)
-
-	for event := range events {
-		for _, result := range event.Transactions {
-			tx := result.GetTransaction()
-
-			if bytes.Equal(tx.GetID(), tx.GetID()) {
-				accepted, err := event.Transactions[0].GetStatus()
-				require.Empty(t, err)
-				require.True(t, accepted)
-				// get the args of the transaction
-				return event.Transactions[0].GetTransaction().GetArg("value:value")
-			}
-		}
-	}
-
-	t.Error("transaction not found")
-	return nil
-}
-
+// -----------------------------------------------------------------------------
 // Utility functions
 
 //

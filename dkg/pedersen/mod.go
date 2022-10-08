@@ -3,10 +3,12 @@ package pedersen
 import (
 	"crypto/sha256"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 
 	"go.dedis.ch/dela"
+
 	"go.dedis.ch/dela/crypto/ed25519"
 	"go.dedis.ch/dela/dkg"
 
@@ -36,6 +38,8 @@ var (
 	// ProtocolNameResharing denotes the value of the protocol span tag
 	// associated with the `dkg-resharing` protocol.
 	protocolNameResharing = "dkg-resharing"
+	// number of workers used to perform the encryption/decryption
+	workerNum = runtime.NumCPU()
 )
 
 const (
@@ -152,6 +156,8 @@ func (a *Actor) Setup(co crypto.CollectiveAuthority, threshold int) (kyber.Point
 				"go the following: %T", msg)
 		}
 
+		dela.Logger.Info().Msgf("node %q done", addr.String())
+
 		dkgPubKeys[i] = doneMsg.GetPublicKey()
 
 		// this is a simple check that every node sends back the same DKG pub
@@ -171,7 +177,7 @@ func (a *Actor) GetPublicKey() (kyber.Point, error) {
 		return nil, xerrors.Errorf("DKG has not been initialized")
 	}
 
-	return a.startRes.GetDistKey(), nil
+	return a.startRes.getDistKey(), nil
 }
 
 // Encrypt implements dkg.Actor. It uses the DKG public key to encrypt a
@@ -194,35 +200,41 @@ func (a *Actor) Encrypt(message []byte) (K, C kyber.Point, remainder []byte,
 	// ElGamal-encrypt the point to produce ciphertext (K,C).
 	k := suite.Scalar().Pick(random.New())             // ephemeral private key
 	K = suite.Point().Mul(k, nil)                      // ephemeral DH public key
-	S := suite.Point().Mul(k, a.startRes.GetDistKey()) // ephemeral DH shared secret
+	S := suite.Point().Mul(k, a.startRes.getDistKey()) // ephemeral DH shared secret
 	C = S.Add(S, M)                                    // message blinded with secret
 
 	return K, C, remainder, nil
 }
 
-// Encrypt implements dkg.Actor. It uses the DKG public key to encrypt a
-// message and provide a zero knowledge proof that the encryption is done by this person
-// a discription can be found in https://arxiv.org/pdf/2205.08529.pdf / section 5.4 Protocol / ster 1: write transaction
-func (a *Actor) VerifiableEncrypt(message []byte, GBar kyber.Point) (ciphertext types.Ciphertext, remainder []byte,
-	err error) {
+// VerifiableEncrypt implements dkg.Actor. It uses the DKG public key to encrypt
+// a message and provide a zero knowledge proof that the encryption is done by
+// this person.
+//
+// See https://arxiv.org/pdf/2205.08529.pdf / section 5.4 Protocol / step 1
+func (a *Actor) VerifiableEncrypt(message []byte, GBar kyber.Point) (ciphertext types.Ciphertext,
+	remainder []byte, err error) {
 
 	if !a.startRes.Done() {
-		return types.Ciphertext{}, nil, xerrors.Errorf("you must first initialize DKG. " +
-			"Did you call setup() first?")
+		return types.Ciphertext{}, nil, xerrors.Errorf("you must first initialize " +
+			"DKG. Did you call setup() first?")
 	}
 
 	// Embed the message (or as much of it as will fit) into a curve point.
 	M := suite.Point().Embed(message, random.New())
+
 	max := suite.Point().EmbedLen()
 	if max > len(message) {
 		max = len(message)
 	}
+
 	remainder = message[max:]
+
 	// ElGamal-encrypt the point to produce ciphertext (K,C).
 	k := suite.Scalar().Pick(random.New())             // ephemeral private key
 	K := suite.Point().Mul(k, nil)                     // ephemeral DH public key
-	S := suite.Point().Mul(k, a.startRes.GetDistKey()) // ephemeral DH shared secret
+	S := suite.Point().Mul(k, a.startRes.getDistKey()) // ephemeral DH shared secret
 	C := S.Add(S, M)                                   // message blinded with secret
+
 	// producing the zero knowledge proof
 	UBar := suite.Point().Mul(k, GBar)
 	s := suite.Scalar().Pick(random.New())
@@ -235,8 +247,10 @@ func (a *Actor) VerifiableEncrypt(message []byte, GBar kyber.Point) (ciphertext 
 	UBar.MarshalTo(hash)
 	W.MarshalTo(hash)
 	WBar.MarshalTo(hash)
+
 	E := suite.Scalar().SetBytes(hash.Sum(nil))
 	F := suite.Scalar().Add(s, suite.Scalar().Mul(E, k))
+
 	ciphertext = types.Ciphertext{
 		K:    K,
 		C:    C,
@@ -251,8 +265,6 @@ func (a *Actor) VerifiableEncrypt(message []byte, GBar kyber.Point) (ciphertext 
 
 // Decrypt implements dkg.Actor. It gets the private shares of the nodes and
 // decrypt the  message.
-// TODO: perform a re-encryption instead of gathering the private shares, which
-// should never happen.
 func (a *Actor) Decrypt(K, C kyber.Point) ([]byte, error) {
 
 	if !a.startRes.Done() {
@@ -260,7 +272,7 @@ func (a *Actor) Decrypt(K, C kyber.Point) ([]byte, error) {
 			"Did you call setup() first?")
 	}
 
-	players := mino.NewAddresses(a.startRes.GetParticipants()...)
+	players := mino.NewAddresses(a.startRes.getParticipants()...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), decryptTimeout)
 	defer cancel()
@@ -271,7 +283,7 @@ func (a *Actor) Decrypt(K, C kyber.Point) ([]byte, error) {
 		return nil, xerrors.Errorf("failed to create stream: %v", err)
 	}
 
-	players = mino.NewAddresses(a.startRes.GetParticipants()...)
+	players = mino.NewAddresses(a.startRes.getParticipants()...)
 	iterator := players.AddressIterator()
 
 	addrs := make([]mino.Address, 0, players.Len())
@@ -335,7 +347,7 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int
 			"Did you call setup() first?")
 	}
 
-	players := mino.NewAddresses(a.startRes.GetParticipants()...)
+	players := mino.NewAddresses(a.startRes.getParticipants()...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), decryptTimeout)
 	defer cancel()
@@ -346,7 +358,7 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int
 		return nil, 0, 0, xerrors.Errorf("failed to create stream: %v", err)
 	}
 
-	players = mino.NewAddresses(a.startRes.GetParticipants()...)
+	players = mino.NewAddresses(a.startRes.getParticipants()...)
 	iterator := players.AddressIterator()
 
 	addrs := make([]mino.Address, 0, players.Len())
@@ -366,27 +378,24 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int
 		return nil, 0, 0, xerrors.Errorf("failed to send verifiable decrypt request: %v", err)
 	}
 
-	var respondArr []types.VerifiableDecryptReply
-	// active address keeps the addresses of the nodes that actively participate in the decryption process
-	var activeAddrs []mino.Address
+	responses := make([]types.VerifiableDecryptReply, len(addrs))
+
 	// receive decrypt reply from the nodes
-
-	for i := 0; i < len(addrs); i++ {
+	for i := range addrs {
 		from, message, err := receiver.Recv(ctx)
-		dela.Logger.Debug().Msgf("received the %d th share from %v\n", i, from)
-
 		if err != nil {
-			return [][]byte{}, 0, 0, xerrors.Errorf("stream stopped unexpectedly: %v", err)
-		} else {
-
-			shareAndProof, ok := message.(types.VerifiableDecryptReply)
-			if !ok {
-				return [][]byte{}, 0, 0, xerrors.Errorf("got unexpected reply, expected "+
-					"%T but got: %T", shareAndProof, message)
-			}
-			respondArr = append(respondArr, shareAndProof)
-			activeAddrs = append(activeAddrs, addrs[i])
+			return nil, 0, 0, xerrors.Errorf("stream stopped unexpectedly: %v", err)
 		}
+
+		dela.Logger.Debug().Msgf("received share from %v\n", from)
+
+		shareAndProof, ok := message.(types.VerifiableDecryptReply)
+		if !ok {
+			return nil, 0, 0, xerrors.Errorf("got unexpected reply, expected "+
+				"%T but got: %T", shareAndProof, message)
+		}
+
+		responses[i] = shareAndProof
 	}
 
 	receivingSharesTime := time.Since(start).Milliseconds()
@@ -396,86 +405,92 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int
 	decryptedMessage := make([][]byte, batchsize)
 
 	var wgBatchReply sync.WaitGroup
-	jobChan := make(chan int, batchsize)
+	jobChan := make(chan int)
 
-	if batchsize > 1 {
+	go func() {
 		for i := 0; i < batchsize; i++ {
 			jobChan <- i
 		}
 
 		close(jobChan)
+	}()
 
-		if batchsize < workerNum {
-			workerNum = batchsize
-		}
-		for i := 0; i < workerNum; i++ {
-			wgBatchReply.Add(1)
+	if batchsize < workerNum {
+		workerNum = batchsize
+	}
 
-			go func(jobChan <-chan int) {
-				defer wgBatchReply.Done()
+	worker := newWorker(len(addrs), decryptedMessage, responses, ciphertexts)
 
-				for j := range jobChan {
-					pubShares := make([]*share.PubShare, len(activeAddrs))
+	for i := 0; i < workerNum; i++ {
+		wgBatchReply.Add(1)
 
-					for k := 0; k < len(activeAddrs); k++ {
-						resp := respondArr[k].GetShareAndProof()[j]
-
-						err = checkDecryptionProof(resp, ciphertexts[j].K)
-						if err != nil {
-							dela.Logger.Error().Msgf("failed to verify the decryption proof : %v", err)
-						} else {
-							pubShares[k] = &share.PubShare{
-								I: int(resp.I),
-								V: resp.V,
-							}
-						}
-					}
-					res, err := share.RecoverCommit(suite, pubShares, len(addrs), len(addrs))
-
-					if err != nil {
-						dela.Logger.Error().Msgf("failed to recover the message : %v", err)
-					}
-					decryptedMessage[j], err = res.Data()
-					if err != nil {
-						dela.Logger.Error().Msgf("failed to get embeded data : %v", err)
-					}
-				}
-			}(jobChan)
-		}
-
-		wgBatchReply.Wait()
-	} else {
-
-		pubShares := make([]*share.PubShare, len(activeAddrs))
-
-		for k := 0; k < len(activeAddrs); k++ {
-			resp := respondArr[k].GetShareAndProof()[0]
-
-			err = checkDecryptionProof(resp, ciphertexts[0].K)
-			if err != nil {
-				dela.Logger.Error().Msgf("failed to verify the decryption proof : %v", err)
-			} else {
-				pubShares[k] = &share.PubShare{
-					I: int(resp.I),
-					V: resp.V,
+		go func() {
+			defer wgBatchReply.Done()
+			for j := range jobChan {
+				err := worker.work(j)
+				if err != nil {
+					dela.Logger.Err(err).Msgf("error in a worker")
 				}
 			}
-		}
-		res, err := share.RecoverCommit(suite, pubShares, len(addrs), len(addrs))
-
-		if err != nil {
-			dela.Logger.Error().Msgf("failed to recover the message : %v", err)
-		}
-		decryptedMessage[0], err = res.Data()
-		if err != nil {
-			dela.Logger.Error().Msgf("failed to get embeded data : %v", err)
-		}
-
+		}()
 	}
+
+	wgBatchReply.Wait()
 
 	decryptionTime := time.Since(start).Milliseconds()
 
 	return decryptedMessage, receivingSharesTime, decryptionTime, nil
+}
+
+func newWorker(numParticipants int, decryptedMessage [][]byte,
+	responses []types.VerifiableDecryptReply, ciphertexts []types.Ciphertext) worker {
+
+	return worker{
+		numParticipants:  numParticipants,
+		decryptedMessage: decryptedMessage,
+		responses:        responses,
+		ciphertexts:      ciphertexts,
+	}
+}
+
+// worker contains the data needed by a worker to perform the verifiable
+// decryption job. All its fields must be read-only, except the
+// decryptedMessage, which can be written at a provided jobIndex.
+type worker struct {
+	numParticipants  int
+	decryptedMessage [][]byte
+	ciphertexts      []types.Ciphertext
+	responses        []types.VerifiableDecryptReply
+}
+
+func (w worker) work(jobIndex int) error {
+	pubShares := make([]*share.PubShare, w.numParticipants)
+
+	for k, response := range w.responses {
+		resp := response.GetShareAndProof()[jobIndex]
+
+		err := checkDecryptionProof(resp, w.ciphertexts[jobIndex].K)
+		if err != nil {
+			return xerrors.Errorf("failed to check the decryption proof: %v", err)
+		}
+
+		pubShares[k] = &share.PubShare{
+			I: int(resp.I),
+			V: resp.V,
+		}
+	}
+
+	res, err := share.RecoverCommit(suite, pubShares, w.numParticipants, w.numParticipants)
+	if err != nil {
+		return xerrors.Errorf("failed to recover the commit: %v", err)
+	}
+
+	w.decryptedMessage[jobIndex], err = res.Data()
+	if err != nil {
+		return xerrors.Errorf("failed to get embedded data : %v", err)
+	}
+
+	return nil
 }
 
 // Reshare implements dkg.Actor. It recreates the DKG with an updated list of
@@ -496,6 +511,7 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 		addrsNew = append(addrsNew, addrIter.GetNext())
 
 		pubkey := pubkeyIter.GetNext()
+
 		edKey, ok := pubkey.(ed25519.PublicKey)
 		if !ok {
 			return xerrors.Errorf("expected ed25519.PublicKey, got '%T'", pubkey)
@@ -505,7 +521,7 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 	}
 
 	// Get the union of the new members and the old members
-	addrsAll := unionOfTwoSlices(a.startRes.GetParticipants(), addrsNew)
+	addrsAll := union(a.startRes.getParticipants(), addrsNew)
 	players := mino.NewAddresses(addrsAll...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), resharingTimeout)
@@ -513,43 +529,51 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 
 	ctx = context.WithValue(ctx, tracing.ProtocolKey, protocolNameResharing)
 
+	dela.Logger.Info().Msgf("resharing with the following participants: %v", addrsAll)
+
 	sender, receiver, err := a.rpc.Stream(ctx, players)
 	if err != nil {
 		return xerrors.Errorf("failed to create stream: %v", err)
 	}
 
-	thresholdOld := a.startRes.GetThreshold()
-	pubkeysOld := a.startRes.GetPublicKeys()
+	thresholdOld := a.startRes.getThreshold()
+	pubkeysOld := a.startRes.getPublicKeys()
 
 	// We don't need to send the old threshold or old public keys to the old or
 	// common nodes
-	//messageOld := types.NewResharingRequest(thresholdNew, 0, addrsNew, nil, pubkeysNew, nil)
+	reshare := types.NewStartResharing(thresholdNew, 0, addrsNew, nil, pubkeysNew, nil)
+
+	dela.Logger.Info().Msgf("resharing to old participants: %v",
+		a.startRes.getParticipants())
 
 	// Send the resharing request to the old and common nodes
-	// err = <-sender.Send(messageOld, a.startRes.GetParticipants()...)
-	// if err != nil {
-	// 	return xerrors.Errorf("failed to send resharing request: %v", err)
-	// }
+	err = <-sender.Send(reshare, a.startRes.getParticipants()...)
+	if err != nil {
+		return xerrors.Errorf("failed to send resharing request: %v", err)
+	}
 
 	// First find the set of new nodes that are not common between the old and
 	// new committee
-	addrsNewNotCommon := subtractOfTwoSlices(addrsNew, a.startRes.GetParticipants())
+	newParticipants := difference(addrsNew, a.startRes.getParticipants())
 
 	// Then create a resharing request message for them. We should send the old
 	// threshold and old public keys to them
-	messageNew := types.NewResharingRequest(thresholdNew, thresholdOld, addrsNew, a.startRes.GetParticipants(), pubkeysNew, pubkeysOld)
+	reshare = types.NewStartResharing(thresholdNew, thresholdOld, addrsNew,
+		a.startRes.getParticipants(), pubkeysNew, pubkeysOld)
+
+	dela.Logger.Info().Msgf("resharing to new participants: %v", newParticipants)
 
 	// Send the resharing request to the new but not common nodes
-	err = <-sender.Send(messageNew, append(a.startRes.GetParticipants(), addrsNewNotCommon...)...)
+	err = <-sender.Send(reshare, newParticipants...)
 	if err != nil {
 		return xerrors.Errorf("failed to send resharing request: %v", err)
 	}
 
 	dkgPubKeys := make([]kyber.Point, len(addrsAll))
+
 	// Wait for receiving the response from the new nodes
 	for i := 0; i < len(addrsAll); i++ {
-
-		_, msg, err := receiver.Recv(ctx)
+		src, msg, err := receiver.Recv(ctx)
 		if err != nil {
 			return xerrors.Errorf("stream stopped unexpectedly: %v", err)
 		}
@@ -557,22 +581,29 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 		doneMsg, ok := msg.(types.StartDone)
 		if !ok {
 			return xerrors.Errorf("expected to receive a Done message, but "+
-				"go the following: %T", msg)
+				"got the following: %T, from %s", msg, src.String())
 		}
+
 		dkgPubKeys[i] = doneMsg.GetPublicKey()
 
+		dela.Logger.Debug().Str("from", src.String()).Msgf("received a done reply")
+
 		// This is a simple check that every node sends back the same DKG pub
-		// key. TODO: handle the situation where a pub key is not the same
+		// key.
+		// TODO: handle the situation where a pub key is not the same
 		if i != 0 && !dkgPubKeys[i-1].Equal(doneMsg.GetPublicKey()) {
 			return xerrors.Errorf("the public keys does not match: %v", dkgPubKeys)
 		}
 	}
+
+	dela.Logger.Info().Msgf("resharing done")
+
 	return nil
 }
 
-// auxiliary function
-// thif function verifies the decryption proof
-// a discription can be found in https://arxiv.org/pdf/2205.08529.pdf / section 5.4 Protocol / step 3: key reconstruction
+// checkDecryptionProof verifies the decryption proof.
+//
+// See https://arxiv.org/pdf/2205.08529.pdf / section 5.4 Protocol / step 3
 func checkDecryptionProof(sp types.ShareAndProof, K kyber.Point) error {
 
 	tmp1 := suite.Point().Mul(sp.Fi, K)
@@ -590,26 +621,30 @@ func checkDecryptionProof(sp types.ShareAndProof, K kyber.Point) error {
 	tmp := suite.Scalar().SetBytes(hash.Sum(nil))
 
 	if !tmp.Equal(sp.Ei) {
-		return xerrors.Errorf("hash is not valid")
+		return xerrors.Errorf("hash is not valid: %x != %x", sp.Ei, tmp)
 	}
+
 	return nil
 }
 
-// Gets the list of the old committee members and new committee members and
-// returns the new committee members that are not common
-func subtractOfTwoSlices(addrsSlice1 []mino.Address, addrsSlice2 []mino.Address) []mino.Address {
-	var subtractedSlice []mino.Address
-	for _, addr1 := range addrsSlice1 {
+// difference performs "el1 difference el2", i.e. it extracts all members of el1
+// that are not present in el2.
+func difference(el1 []mino.Address, el2 []mino.Address) []mino.Address {
+	var result []mino.Address
+
+	for _, addr1 := range el1 {
 		exist := false
-		for _, addr2 := range addrsSlice2 {
+		for _, addr2 := range el2 {
 			if addr1.Equal(addr2) {
 				exist = true
 				break
 			}
 		}
+
 		if !exist {
-			subtractedSlice = append(subtractedSlice, addr1)
+			result = append(result, addr1)
 		}
 	}
-	return subtractedSlice
+
+	return result
 }

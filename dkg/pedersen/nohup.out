@@ -1,0 +1,60 @@
+initiating the dkg nodes ...
+n =  64
+setting up the dkg ...
+=== starting the process with batch size = 1 === 
+decrypting the batch ...
+[90m2022-10-08T13:55:43+02:00[0m [1m[31mERR[0m[0m [1mhandler.go:414[0m[36m >[0m 127.0.0.1:44087 failed to start: failed to announce dkg public key: got an error while sending pub key: session 127.0.0.1:34969 is closing: Canceled
+=== starting the process with batch size = 2 === 
+decrypting the batch ...
+=== starting the process with batch size = 4 === 
+decrypting the batch ...
+=== starting the process with batch size = 8 === 
+decrypting the batch ...
+=== starting the process with batch size = 16 === 
+decrypting the batch ...
+=== starting the process with batch size = 32 === 
+decrypting the batch ...
+=== starting the process with batch size = 64 === 
+decrypting the batch ...
+=== starting the process with batch size = 128 === 
+decrypting the batch ...
+=== starting the process with batch size = 256 === 
+decrypting the batch ...
+=== starting the process with batch size = 512 === 
+decrypting the batch ...
+panic: sync: WaitGroup is reused before previous Wait has returned
+
+goroutine 4450020 [running]:
+sync.(*WaitGroup).Wait(0xc5289670e0?)
+	/usr/local/go/src/sync/waitgroup.go:141 +0x85
+go.dedis.ch/dela/dkg/pedersen.(*Handler).handleVerifiableDecrypt(0xc00019e380, {0x7fe2f822acc8, 0xc5292da580}, {{0xc52a89c000?, 0x0?, 0x404e77?}}, {0xd65bb8?, 0xc4d7482db0})
+	/home/mahsa/dela/dela/dkg/pedersen/handler.go:364 +0x69e
+go.dedis.ch/dela/dkg/pedersen.(*Handler).Stream(0xc00019e380, {0x7fe2f822acc8, 0xc5292da580}, {0x7fe2f822ace8, 0xc5292da580})
+	/home/mahsa/dela/dela/dkg/pedersen/handler.go:268 +0xe7a
+go.dedis.ch/dela/mino/minogrpc.(*overlayServer).Stream(0xc00011d8a0, {0xd69dc8?, 0xc4d7b18bc0})
+	/home/mahsa/dela/dela/mino/minogrpc/server.go:341 +0xe78
+go.dedis.ch/dela/mino/minogrpc/ptypes._Overlay_Stream_Handler({0xbf3220?, 0xc00011d8a0}, {0xd682f0?, 0xc51f61b4e0})
+	/home/mahsa/dela/dela/mino/minogrpc/ptypes/overlay.pb.go:572 +0x9f
+github.com/opentracing-contrib/go-grpc.OpenTracingStreamServerInterceptor.func1({0xbf3220, 0xc00011d8a0}, {0xd684e8, 0xc524bccd00?}, 0xc50560e900, 0xc92bd8)
+	/home/mahsa/go/pkg/mod/github.com/opentracing-contrib/go-grpc@v0.0.0-20200813121455-4a6760c71486/server.go:114 +0x37b
+google.golang.org/grpc.(*Server).processStreamingRPC(0xc000e14b40, {0xd6a3e0, 0xc523478820}, 0xc52703e7e0, 0xc000b8d590, 0x11e7ba0, 0xc52929e680)
+	/home/mahsa/go/pkg/mod/google.golang.org/grpc@v1.49.0/server.go:1571 +0xfa6
+google.golang.org/grpc.(*Server).handleStream(0xc000e14b40, {0xd6a3e0, 0xc523478820}, 0xc52703e7e0, 0xc52929e680)
+	/home/mahsa/go/pkg/mod/google.golang.org/grpc@v1.49.0/server.go:1646 +0x9ea
+google.golang.org/grpc.(*Server).serveStreams.func1.2()
+	/home/mahsa/go/pkg/mod/google.golang.org/grpc@v1.49.0/server.go:938 +0x98
+created by google.golang.org/grpc.(*Server).serveStreams.func1
+	/home/mahsa/go/pkg/mod/google.golang.org/grpc@v1.49.0/server.go:936 +0x28a
+exit status 2
+FAIL	go.dedis.ch/dela/dkg/pedersen	390.858s
+PASS
+ok  	go.dedis.ch/dela/dkg/pedersen	184.072s
+signal: interrupt
+FAIL	go.dedis.ch/dela/dkg/pedersen	103.126s
+PASS
+ok  	go.dedis.ch/dela/dkg/pedersen	1.793s
+PASS
+ok  	go.dedis.ch/dela/dkg/pedersen	150.701s
+n=128, batchSize=32, workerNum=8, decryption time=1.180764613s, throughput=27.10108318600161[tx/s], dkg setup time=2m28.341530757sPASS
+ok  	go.dedis.ch/dela/dkg/pedersen	152.266s
+handler.go:6:1: expected 'STRING', found '<<'

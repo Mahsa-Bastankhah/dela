@@ -1,7 +1,7 @@
 // This file contains the implementation of the inner overlay of the minogrpc
 // instance which processes the requests from the gRPC server.
 //
-// Dcoumentation Last Review: 07.10.2020
+// Documentation Last Review: 07.10.2020
 //
 
 package minogrpc
@@ -9,14 +9,18 @@ package minogrpc
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+
 	"math/big"
 	"net"
 	"net/url"
 	"time"
+
+	"github.com/opentracing/opentracing-go"
 
 	"go.dedis.ch/dela/internal/debugsync"
 
@@ -35,8 +39,6 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/opentracing/opentracing-go"
 )
 
 // GRPC_GO_LOG_SEVERITY_LEVEL=info;GRPC_GO_LOG_VERBOSITY_LEVEL=10;
@@ -54,7 +56,7 @@ const (
 
 	// defaultMinConnectTimeout is the minimum amount of time we are willing to
 	// wait for a grpc connection to complete
-	defaultMinConnectTimeout = 60 * time.Minute
+	defaultMinConnectTimeout = 60 * time.Second
 )
 
 var getTracerForAddr = tracing.GetTracerForAddr
@@ -462,7 +464,14 @@ func newOverlay(tmpl *minoTemplate) (*overlay, error) {
 	// session.Address never returns an error
 	myAddrBuf, _ := tmpl.myAddr.MarshalText()
 
-	if tmpl.secret == nil || tmpl.public == nil {
+	if tmpl.cert != nil {
+		tmpl.secret = tmpl.cert.PrivateKey
+		// it is okay to crash at this point, as the certificate's key is
+		// invalid
+		tmpl.public = tmpl.cert.PrivateKey.(interface{ Public() crypto.PublicKey }).Public()
+	}
+
+	if tmpl.secret == nil {
 		priv, err := ecdsa.GenerateKey(tmpl.curve, tmpl.random)
 		if err != nil {
 			return nil, xerrors.Errorf("cert private key: %v", err)
@@ -528,8 +537,6 @@ func (o *overlay) GetCertificateChain() certs.CertChain {
 		// provoke several issues later on.
 		panic("certificate of the overlay must be populated")
 	}
-
-	// me.PrivateKey = o.secret
 
 	return me
 }
@@ -695,7 +702,6 @@ func (mgr *connManager) Acquire(to mino.Address) (grpc.ClientConnInterface, erro
 		return nil, xerrors.Errorf("failed to get tracer for addr %s: %v", addr, err)
 	}
 
-	// grpc.EnableTracing = true
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(2)*time.Second)
 	defer cancel()
 
