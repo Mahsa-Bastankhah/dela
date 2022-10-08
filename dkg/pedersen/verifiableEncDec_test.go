@@ -126,8 +126,8 @@ func Test_verifiableEncDec_minogrpc(t *testing.T) {
 	batchSizeSlice := []int{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}
 
 	// setting up the dkg
-	n := 64
-	threshold := 64
+	n := 128
+	threshold := n
 
 	minos := make([]mino.Mino, n)
 	dkgs := make([]dkg.DKG, n)

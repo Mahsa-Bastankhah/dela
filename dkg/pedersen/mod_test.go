@@ -3,8 +3,10 @@ package pedersen
 import (
 	"testing"
 
+	"go.dedis.ch/dela"
 	"go.dedis.ch/dela/mino/router/flat"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/dela/crypto"
 	"go.dedis.ch/dela/crypto/ed25519"
@@ -136,7 +138,14 @@ func TestPedersen_Scenario(t *testing.T) {
 	// 	traffic.SaveEvents("events.dot")
 	// }()
 
-	n := 70
+	oldLog := dela.Logger
+	defer func() {
+		dela.Logger = oldLog
+	}()
+
+	dela.Logger = dela.Logger.Level(zerolog.WarnLevel)
+
+	n := 128
 
 	minos := make([]mino.Mino, n)
 	dkgs := make([]dkg.DKG, n)
