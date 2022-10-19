@@ -121,7 +121,9 @@ func Test_F3B_records(t *testing.T) {
 		require.NoError(t, err)
 		row = append(row, strconv.Itoa(int(recieveSharesTime)))
 		row = append(row, strconv.Itoa(int(decryptionTime)))
+
 	}
+	row = append(row, strconv.Itoa(100))
 
 	if err := w.Write(row); err != nil {
 		log.Fatalln("error writing record to file", err)

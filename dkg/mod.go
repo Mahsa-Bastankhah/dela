@@ -1,8 +1,12 @@
 package dkg
 
 import (
+	"time"
+
 	"go.dedis.ch/dela/crypto"
 	"go.dedis.ch/dela/dkg/pedersen/types"
+	"go.dedis.ch/dela/mino"
+	"go.dedis.ch/dela/serde"
 	"go.dedis.ch/kyber/v3"
 )
 
@@ -11,6 +15,25 @@ type DKG interface {
 	// Listen starts the RPC. This function should be called on each node that
 	// wishes to participate in a DKG.
 	Listen() (Actor, error)
+	Listen1(sendBuffChan chan SendBuff) (Actor, error)
+}
+
+type SendBuff struct {
+	Addr mino.Address
+	Msg  serde.Message
+	T    time.Time
+	Out  mino.Sender
+}
+
+func NewSendBuff(addr mino.Address, msg serde.Message, t time.Time, out mino.Sender) SendBuff {
+	return SendBuff{Addr: addr,
+		Msg: msg,
+		T:   t,
+		Out: out}
+}
+
+func getMsg() {
+	return
 }
 
 // Actor defines the primitives to use a DKG protocol

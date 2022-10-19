@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.dedis.ch/dela"
 	"go.dedis.ch/dela/cosi/threshold"
+	"go.dedis.ch/dela/dkg"
 	"go.dedis.ch/dela/dkg/pedersen/types"
 	"go.dedis.ch/dela/mino"
 	"go.dedis.ch/kyber/v3"
@@ -36,6 +37,8 @@ const recvTimeout = time.Second * 30
 
 // constant used in the logs
 const newState = "new state"
+
+const delay = time.Millisecond * 100
 
 func newCryChan[T any](bufSize int) cryChan[T] {
 	llvl := zerolog.NoLevel
@@ -226,31 +229,36 @@ func (s *state) getThreshold() int {
 // Handler represents the RPC executed on each node
 //
 // - implements mino.Handler
+
 type Handler struct {
 	mino.UnsupportedHandler
 	sync.RWMutex
-	dkg       *pedersen.DistKeyGenerator
-	privKey   kyber.Scalar
-	me        mino.Address
-	privShare *share.PriShare
-	startRes  *state
-	log       zerolog.Logger
-	running   bool
+	dkg          *pedersen.DistKeyGenerator
+	privKey      kyber.Scalar
+	me           mino.Address
+	privShare    *share.PriShare
+	startRes     *state
+	log          zerolog.Logger
+	running      bool
+	sendBuffChan chan dkg.SendBuff
 }
 
 // NewHandler creates a new handler
-func NewHandler(privKey kyber.Scalar, me mino.Address) *Handler {
+func NewHandler(privKey kyber.Scalar, me mino.Address, sendBuffChan chan dkg.SendBuff) *Handler {
 	log := dela.Logger.With().Str("role", "DKG handler").Str("addr", me.String()).Logger()
 
-	return &Handler{
+	h := &Handler{
 		privKey: privKey,
 		me:      me,
 		startRes: &state{
 			dkgState: initial,
 		},
-		log:     log,
-		running: false,
+		log:          log,
+		running:      false,
+		sendBuffChan: sendBuffChan,
 	}
+
+	return h
 }
 
 // Stream implements mino.Handler. It allows one to stream messages to the
@@ -390,11 +398,12 @@ func (h *Handler) handleDecrypt(out mino.Sender, msg types.DecryptRequest,
 	partial := suite.Point().Sub(msg.C, S)
 	decryptReply := types.NewDecryptReply(int64(h.privShare.I), partial)
 
-	errs := out.Send(decryptReply, from)
-	err := <-errs
-	if err != nil {
-		return xerrors.Errorf("got an error while sending the decrypt reply: %v", err)
-	}
+	// errs := out.Send(decryptReply, from)
+	// err := <-errs
+	// if err != nil {
+	// 	return xerrors.Errorf("got an error while sending the decrypt reply: %v", err)
+	// }
+	h.sendBuffChan <- dkg.NewSendBuff(from, decryptReply, time.Now(), out)
 
 	return nil
 }
@@ -505,17 +514,19 @@ func (h *Handler) deal(ctx context.Context, out mino.Sender) error {
 
 		h.log.Trace().Str("to", to.String()).Msg("send deal")
 
-		errs := out.Send(dealMsg, to)
+		// errs := out.Send(dealMsg, to)
 
-		// this can be blocking if the recipient is not receiving message
-		select {
-		case err = <-errs:
-			if err != nil {
-				h.log.Err(err).Str("to", to.String()).Msg("failed to send deal")
-			}
-		case <-ctx.Done():
-			return xerrors.Errorf("context done: %v", ctx.Err())
-		}
+		// // this can be blocking if the recipient is not receiving message
+		// select {
+		// case err = <-errs:
+		// 	if err != nil {
+		// 		h.log.Err(err).Str("to", to.String()).Msg("failed to send deal")
+		// 	}
+		// case <-ctx.Done():
+		// 	return xerrors.Errorf("context done: %v", ctx.Err())
+		// }
+
+		h.sendBuffChan <- dkg.NewSendBuff(to, dealMsg, time.Now(), out)
 	}
 
 	return nil
@@ -606,14 +617,16 @@ func (h *Handler) finalize(ctx context.Context, from mino.Address, out mino.Send
 
 	done := types.NewStartDone(distKey.Public())
 
-	select {
-	case err = <-out.Send(done, from):
-		if err != nil {
-			return xerrors.Errorf("got an error while sending pub key: %v", err)
-		}
-	case <-ctx.Done():
-		h.log.Warn().Msgf("context done (this might be expected): %v", ctx.Err())
-	}
+	// select {
+	// case err = <-out.Send(done, from):
+	// 	if err != nil {
+	// 		return xerrors.Errorf("got an error while sending pub key: %v", err)
+	// 	}
+	// case <-ctx.Done():
+	// 	h.log.Warn().Msgf("context done (this might be expected): %v", ctx.Err())
+	// }
+
+	h.sendBuffChan <- dkg.NewSendBuff(from, done, time.Now(), out)
 
 	return nil
 }
@@ -656,16 +669,17 @@ func (h *Handler) handleDeal(ctx context.Context, msg types.Deal,
 		h.log.Trace().Str("to", addr.String()).Uint32("dealer", response.Index).
 			Msg("sending response")
 
-		errs := out.Send(resp, addr)
+		// errs := out.Send(resp, addr)
 
-		select {
-		case err = <-errs:
-			if err != nil {
-				return xerrors.Errorf("failed to send response to '%s': %v", addr, err)
-			}
-		case <-ctx.Done():
-			return xerrors.Errorf("context done: %v", ctx.Err())
-		}
+		// select {
+		// case err = <-errs:
+		// 	if err != nil {
+		// 		return xerrors.Errorf("failed to send response to '%s': %v", addr, err)
+		// 	}
+		// case <-ctx.Done():
+		// 	return xerrors.Errorf("context done: %v", ctx.Err())
+		// }
+		h.sendBuffChan <- dkg.NewSendBuff(addr, resp, time.Now(), out)
 	}
 
 	return nil
@@ -697,14 +711,16 @@ func (h *Handler) finalizeReshare(ctx context.Context, isCommonNode bool, out mi
 	// finished the resharing successfully
 	done := types.NewStartDone(publicKey)
 
-	select {
-	case err := <-out.Send(done, from):
-		if err != nil {
-			return xerrors.Errorf("got an error while sending pub key: %v", err)
-		}
-	case <-ctx.Done():
-		h.log.Warn().Msgf("context done (this might be expected): %v", ctx.Err())
-	}
+	// select {
+	// case err := <-out.Send(done, from):
+	// 	if err != nil {
+	// 		return xerrors.Errorf("got an error while sending pub key: %v", err)
+	// 	}
+	// case <-ctx.Done():
+	// 	h.log.Warn().Msgf("context done (this might be expected): %v", ctx.Err())
+	// }
+
+	h.sendBuffChan <- dkg.NewSendBuff(from, done, time.Now(), out)
 
 	dela.Logger.Info().Msgf("%s announced the DKG public key", h.me)
 
@@ -861,14 +877,15 @@ func (h *Handler) sendDealsResharing(ctx context.Context, out mino.Sender,
 
 		h.log.Trace().Msgf("%s sent dealResharing %d", h.me, i)
 
-		select {
-		case err := <-out.Send(dealResharingMsg, participants[i]):
-			if err != nil {
-				return xerrors.Errorf("failed to send resharing deal: %v", err)
-			}
-		case <-ctx.Done():
-			return xerrors.Errorf("context done: %v", ctx.Err())
-		}
+		// select {
+		// case err := <-out.Send(dealResharingMsg, participants[i]):
+		// 	if err != nil {
+		// 		return xerrors.Errorf("failed to send resharing deal: %v", err)
+		// 	}
+		// case <-ctx.Done():
+		// 	return xerrors.Errorf("context done: %v", ctx.Err())
+		// }
+		h.sendBuffChan <- dkg.NewSendBuff(participants[i], dealResharingMsg, time.Now(), out)
 	}
 
 	h.log.Debug().Msgf("%s sent all its deals", h.me)
@@ -1003,11 +1020,12 @@ func (h *Handler) handleVerifiableDecrypt(out mino.Sender,
 
 	verifiableDecryptReply := types.NewVerifiableDecryptReply(shareAndProofs)
 
-	errs := out.Send(verifiableDecryptReply, from)
-	err := <-errs
-	if err != nil {
-		return xerrors.Errorf("failed to send verifiable decrypt: %v", err)
-	}
+	// errs := out.Send(verifiableDecryptReply, from)
+	// err := <-errs
+	// if err != nil {
+	// 	return xerrors.Errorf("failed to send verifiable decrypt: %v", err)
+	// }
+	h.sendBuffChan <- dkg.NewSendBuff(from, verifiableDecryptReply, time.Now(), out)
 
 	return nil
 }

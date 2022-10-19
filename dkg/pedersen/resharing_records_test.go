@@ -29,10 +29,6 @@ import (
 	"encoding/csv"
 )
 
-// func init() {
-// 	rand.Seed(0)
-// }
-
 var nOldFlag = flag.String("nOld", "", "the number of old committee members")
 var nCommonFlag = flag.String("nCommon", "", "the number of common members")
 var nNewFlag = flag.String("nNew", "", "the number of new members")
@@ -40,9 +36,29 @@ var nNewFlag = flag.String("nNew", "", "the number of new members")
 // This test creats a dkg committee then creats another committee (that can
 // share some nodes with the old committee) and then redistributes the secret to
 // the new commitee. Using minogrpc as the underlying network
+
 func TestResharingRecords(t *testing.T) {
 
-	/////////////// managing the file
+	sendBuffChan := make(chan dkg.SendBuff)
+
+	nThreads := 600
+	// We make an artificial delay of 100ms for all the packets sent by nodes
+	for i := 0; i < nThreads; i++ {
+		go func() {
+			for true {
+				sendBuff := <-sendBuffChan
+				if time.Since(sendBuff.T) >= delay {
+					sendBuff.Out.Send(sendBuff.Msg, sendBuff.Addr)
+				} else {
+					time.Sleep(delay - time.Since(sendBuff.T))
+					sendBuff.Out.Send(sendBuff.Msg, sendBuff.Addr)
+				}
+			}
+
+		}()
+	}
+
+	// Managing the file
 	file, err := os.OpenFile("resharing_records.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	defer file.Close()
 	if err != nil {
@@ -66,17 +82,12 @@ func TestResharingRecords(t *testing.T) {
 	if err != nil {
 		panic("not nNew right argument")
 	}
-	// nOld := 3
-	// nCommon := 3
-	// nNew := 0
-	/////////////////////////////////////////////////// first loop 	////////////////////////////////////////////
-	//for _, nOld := range nOldSlice {
+
 	fmt.Println("==============  starting the dkg ============== ")
 	fmt.Println("n old = ", nOld)
 
 	thresholdOld := nOld
 	thresholdNew := nCommon + nNew
-	/////////////////////////////////////////////////// second loop ////////////////////////////////////////////
 
 	minosOld := make([]mino.Mino, nOld)
 	dkgsOld := make([]dkg.DKG, nOld)
@@ -112,7 +123,7 @@ func TestResharingRecords(t *testing.T) {
 	actorsOld := make([]dkg.Actor, nOld)
 
 	for i := 0; i < nOld; i++ {
-		actor, err := dkgsOld[i].Listen()
+		actor, err := dkgsOld[i].Listen1(sendBuffChan)
 		require.NoError(t, err)
 		actorsOld[i] = actor
 	}
@@ -188,7 +199,7 @@ func TestResharingRecords(t *testing.T) {
 		actorsNew[i] = actorsOld[i]
 	}
 	for i := 0; i < nNew; i++ {
-		actor, err := dkgsNew[i+nCommon].Listen()
+		actor, err := dkgsNew[i+nCommon].Listen1(sendBuffChan)
 		require.NoError(t, err)
 		actorsNew[i+nCommon] = actor
 	}
@@ -219,7 +230,7 @@ func TestResharingRecords(t *testing.T) {
 	}
 
 	recordSlice := []string{strconv.Itoa(nOld), strconv.Itoa(nCommon), strconv.Itoa(nNew),
-		strconv.Itoa(int(dkgSetupTime)), strconv.Itoa(int(resharingTime))}
+		strconv.Itoa(int(dkgSetupTime)), strconv.Itoa(int(resharingTime)), strconv.Itoa(100)}
 
 	if err := w.Write(recordSlice); err != nil {
 		log.Fatalln("error writing record to file", err)

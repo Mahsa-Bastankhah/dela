@@ -74,7 +74,19 @@ func NewPedersen(m mino.Mino) (*Pedersen, kyber.Point) {
 // Listen implements dkg.DKG. It must be called on each node that participates
 // in the DKG. Creates the RPC.
 func (s *Pedersen) Listen() (dkg.Actor, error) {
-	h := NewHandler(s.privKey, s.mino.GetAddress())
+	h := NewHandler(s.privKey, s.mino.GetAddress(), nil)
+
+	a := &Actor{
+		rpc:      mino.MustCreateRPC(s.mino, "dkg", h, s.factory),
+		factory:  s.factory,
+		startRes: h.startRes,
+	}
+
+	return a, nil
+}
+
+func (s *Pedersen) Listen1(sendBuffChan chan dkg.SendBuff) (dkg.Actor, error) {
+	h := NewHandler(s.privKey, s.mino.GetAddress(), sendBuffChan)
 
 	a := &Actor{
 		rpc:      mino.MustCreateRPC(s.mino, "dkg", h, s.factory),
@@ -130,6 +142,7 @@ func (a *Actor) Setup(co crypto.CollectiveAuthority, threshold int) (kyber.Point
 
 	message := types.NewStart(threshold, addrs, pubkeys)
 
+	time.Sleep(delay)
 	errs := sender.Send(message, addrs...)
 	err = <-errs
 	if err != nil {
@@ -289,6 +302,7 @@ func (a *Actor) Decrypt(K, C kyber.Point) ([]byte, error) {
 
 	message := types.NewDecryptRequest(K, C)
 
+	time.Sleep(delay)
 	err = <-sender.Send(message, addrs...)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to send decrypt request: %v", err)
@@ -367,6 +381,7 @@ func (a *Actor) VerifiableDecrypt(ciphertexts []types.Ciphertext) ([][]byte, int
 	message := types.NewVerifiableDecryptRequest(ciphertexts)
 	start := time.Now()
 	// sending the decrypt request to the nodes
+	time.Sleep(delay)
 	err = <-sender.Send(message, addrs...)
 	if err != nil {
 		return nil, 0, 0, xerrors.Errorf("failed to send verifiable decrypt request: %v", err)
@@ -541,6 +556,7 @@ func (a *Actor) Reshare(co crypto.CollectiveAuthority, thresholdNew int) error {
 		a.startRes.getParticipants())
 
 	// Send the resharing request to the old and common nodes
+	time.Sleep(delay)
 	err = <-sender.Send(reshare, a.startRes.getParticipants()...)
 	if err != nil {
 		return xerrors.Errorf("failed to send resharing request: %v", err)
